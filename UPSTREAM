@@ -1,0 +1,6 @@
+Hestia port of https://github.com/orloxgr/Mass-wp-update-webuzo
+Source revision: 68580e4003a06a24a6607f536570fd9e39acf0aa (0.2.1)
+
+Original maintenance workflow: https://github.com/orloxgr/mass-wp-update (MIT)
+Native panel request transport adapted from https://github.com/orloxgr/webuzo-de-noise (GPL-3.0-or-later).
+This integration is distributed under GPL-3.0-or-later.

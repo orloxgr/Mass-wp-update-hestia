@@ -1,0 +1,27 @@
+# Initial Hestia port verification
+
+Verified in a disposable VMware Hestia 1.10.6 installation with PHP 8.3 and MariaDB. No production sites were used. These results cover the native Apache + PHP-FPM topology; other Hestia versions/topologies still require their own compatibility check.
+
+## Backend and panel authorization
+
+- Isolated Linux/root regression tests cover account ownership, role checks, suspension/target changes, ZIP integrity and identity, unsafe paths/links, account UID isolation, uploads, retention, downloads and pending premium entries.
+- Native Hestia admin login renders the addon; wrong CSRF tokens and ordinary hosting-user GET/POST requests are rejected.
+- Repeated installation works. Uninstall/reinstall preserves private packages, backups and history. Uninstall refuses an active job.
+
+## Actual update workflow
+
+- A dedicated hosting account contains a primary WordPress installation, a second installation in a subdirectory and a separate plain HTML domain. Discovery lists the two WordPress installations with separate IDs and excludes HTML.
+- Browser buttons update both installations from WordPress 6.7.2 to the available upstream version, including database, Akismet and themes, with plugin/theme/database backups first.
+- A deliberately expired-license update provider creates exactly one empty **Awaiting premium ZIP** record. The free update and the other installation complete. HTTP/network errors are tested separately and do not become premium entries.
+- Uploading the matching package fills the pending record. Its premium-only update button installs version 2.0 over the existing 1.0 plugin without activating it.
+- A real vendor WPBakery 8.7.2 ZIP was accepted independently of its download filename and installed under the hosting account UID without activation. That proprietary ZIP and all credentials remain outside Git and the distribution.
+- Names in both site lists link to their correct primary/subdirectory URL with `target="_blank"` and `rel="noopener noreferrer"`.
+
+## Backups and background jobs
+
+- Real archives pass ZIP integrity and SHA-256 checks, use the account UID and mode 600, and contain the expected database SQL. The authenticated panel download returns the matching manifest.
+- Retention and explicit deletion affect only the selected installation, preserving the second installation under the same account.
+- Reloading the browser preserves the running background update. Publishing a new addon code generation preserves the original worker's identity and progress.
+- **Stop after current site** completes that site's backup and does not start the next installation.
+
+Updates are tested actions rather than a guarantee that third-party WordPress code cannot fail. A failed selected backup prevents that site's updates; completed actions remain recorded. Unsupported custom WordPress content-directory layouts are reported before changes.
