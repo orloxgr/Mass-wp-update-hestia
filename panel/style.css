@@ -12,3 +12,4 @@
 .mwu .mwu-error-details{margin-top:8px;font-size:12px}
 .mwu .mwu-error-details summary{cursor:pointer}
 .mwu .mwu-error-details pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:240px;overflow:auto;max-width:100%;margin-top:8px}
+.mwu .mwu-has-result>td{border-bottom:0;padding-bottom:6px}.mwu .mwu-site-result>td{padding:0 12px 16px 44px}.mwu .mwu-site-result .mwu-result{margin:0}@media(max-width:700px){.mwu .mwu-site-result>td{padding-left:8px;padding-right:8px}}

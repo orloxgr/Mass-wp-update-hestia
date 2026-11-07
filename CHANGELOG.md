@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.5
+
+- Show each latest-job result directly beneath its matching site row, with completed actions, errors, warnings, backup location and downloads. Activity keeps the website counter and current operation instead of repeating a separate list of site cards.
+- Keep previous job results and their downloads available through history. Inline downloads retain the exact job and installation identity.
+
 ## 0.1.4
 
 - Show Website N/total between the Activity heading and the current operation. The worker persists the current site position for update and backup jobs, including after refresh, without counting only successful sites.

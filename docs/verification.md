@@ -47,3 +47,7 @@ The 69 backend tests and seven PHP request checks pass. Preference regressions v
 ## 0.1.4 Activity site counter
 
 A database-only job for the two dedicated VM installations completed through the native panel. Browser inspection confirmed Website 2/2 between Activity and the operation message, including after reload, with no addon JavaScript errors. The 70 backend tests and seven PHP request checks pass. Worker regression checks observe positions 1/2 and 2/2 during plugin-update progress, including a failed first site; a legacy running job also recovers its position from its request and results.
+
+## 0.1.5 results beneath site rows
+
+Browser verification used a new database-only panel job for the two owned VM installations sharing one domain but using different directories. Each completed result appeared directly beneath the matching site ID; Activity contained only its summary. Both inline manifest downloads returned the correct completed installation manifest using the exact new job ID. Bulk selection, previous-job results and page reload continued to work. The final layout was visually inspected and no addon JavaScript errors occurred. The existing 70 backend tests and seven PHP request checks pass.

@@ -9,7 +9,7 @@ Update WordPress sites from the Hestia administrator panel and keep your premium
 3. Choose whether to back up **plugins**, **themes**, and the **database**, and how many backup sets to keep per site (1–10, default 1).
 4. Click **Update selected sites**.
 
-Sites run one at a time. Selected backups finish before that site's updates begin; a failed backup stops updates for that site. Activity shows completed actions, skipped premium updates, errors, and backup downloads. **Previous updates & backups** keeps earlier results and downloads available. **Stop after current site** lets the current site finish before the next one starts.
+Sites run one at a time. Selected backups finish before that site's updates begin; a failed backup stops updates for that site. The latest job's completed actions, skipped premium updates, errors, warnings and backup downloads appear directly beneath each matching site in the table. Activity shows the website counter and current operation. **Previous updates & backups** keeps earlier results and downloads available. **Stop after current site** lets the current site finish before the next one starts.
 
 Activity shows **Website N/total** above the current operation, for example **Website 2/23** while updating a plugin on the second selected site. The position includes failed sites and is restored from the server after a page reload.
 
