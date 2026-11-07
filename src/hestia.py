@@ -21,7 +21,8 @@ def name(value):
 
 
 def cli(command, *arguments):
-    if command not in ('v-list-users', 'v-list-user', 'v-list-web-domains', 'v-list-web-domain'):
+    if command not in ('v-list-users', 'v-list-user', 'v-list-web-domains', 'v-list-web-domain',
+                       'v-list-databases', 'v-list-database-host'):
         raise ValueError('Unsupported Hestia discovery command')
     path = ROOT / 'bin' / command
     state.trusted(path)
@@ -33,6 +34,49 @@ def cli(command, *arguments):
     if not isinstance(data, dict):
         raise ValueError('Invalid Hestia inventory response')
     return data
+
+
+def database_target(owner, connection):
+    """Match the site's actual database to this account's native registration."""
+    name(owner)
+    database = connection['name']
+    row = cli('v-list-databases', owner, 'json').get(database)
+    if not isinstance(row, dict) or row.get('TYPE') != 'mysql':
+        return None
+    # Explicit socket paths and other nonstandard DB_HOST layouts stay with
+    # WordPress's own connection. Never guess a local database from its name.
+    raw = connection['host']
+    match = re.fullmatch(r'(?:\[([^\]]+)\]|([^:]+))(?::([0-9]+))?', raw)
+    if not match:
+        return None
+    hostname = match[1] or match[2]
+    if hostname.casefold() != str(row.get('HOST', '')).casefold():
+        return None
+    details = cli('v-list-database-host', 'mysql', row['HOST'], 'json').get(row['HOST'])
+    if not isinstance(details, dict):
+        raise ValueError('Hestia did not return the registered database server')
+    port = int(match[3] or connection['port'])
+    if port != int(details.get('PORT') or 3306):
+        return None
+    name(database)
+    return database
+
+
+def dump_database(owner, database, output):
+    """Use Hestia's registered credentials, without executing WordPress as root."""
+    name(owner); name(database)
+    command = ROOT / 'bin/v-dump-database'
+    state.trusted(command)
+    result = subprocess.run([str(command), owner, database], env=ENV,
+                            stdin=subprocess.DEVNULL, stdout=output, stderr=subprocess.PIPE)
+    output.flush()
+    output.seek(0)
+    if result.returncode:
+        details = result.stderr.decode('utf-8', errors='replace')
+        details += output.read().decode('utf-8', errors='replace')
+        raise RuntimeError('Hestia database export failed (' + str(result.returncode) + '): ' + details.strip())
+    if os.fstat(output.fileno()).st_size == 0:
+        raise RuntimeError('Hestia database export is empty')
 
 
 def administrator(actor):

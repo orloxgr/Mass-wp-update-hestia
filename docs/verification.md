@@ -31,3 +31,9 @@ Updates are tested actions rather than a guarantee that third-party WordPress co
 Verified real WordPress inventory with underscore-prefixed main files, spaces and Unicode. A plugin directory named `--all` was passed as a positional plugin identity rather than a bulk-update option.
 
 A dedicated PHP CLI wrapper disabled process functions to reproduce database-export failure. The corrected direct export and actual account-owned database ZIP completed, with valid SQL, the hosting UID and CLI SAPI. Other restrictions remained active, and CLI/FPM php.ini checksums remained unchanged. A real failing mysqli DNS request retained its complete trace while producing a concise database-host diagnosis.
+
+## 0.1.2 native database backups
+
+The VMware Hestia installation exported the two dedicated test account's distinct registered databases through actual `v-dump-database` calls. Both completed with all PHP CLI process functions disabled. Each account-owned `database.zip` contained valid SQL for the expected database, matched its manifest checksum and had mode 600. Private descriptors delivered SQL to the account writers. CLI/FPM configuration checksums remained unchanged. After native installation, an authenticated panel job also completed database-only backups for both installations without running WordPress updates.
+
+Backend regressions cover account ownership, mismatched hosts/ports, explicit sockets, IPv6 and external fallback selection, native process failures, empty exports and exact SQL contents. A native failure never publishes a database ZIP or silently switches to WordPress export. Existing backup-failure tests verify that a failed selected backup prevents site updates and retains completed backup records.

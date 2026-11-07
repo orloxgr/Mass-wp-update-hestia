@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.2
+
+- Back up databases registered to the site's own Hestia account through native `v-dump-database`, using Hestia's server credentials rather than the application's dump credentials or PHP process functions. Match database name, host and port before choosing the native provider.
+- Keep account-owned `database.zip`, private storage, checksums, retention and backup-before-update behavior. SQL passes through an open private descriptor; root never executes WordPress PHP or writes through an account-controlled destination path.
+- Preserve WP-CLI export for external or unmatched connections. Retain complete export error output instead of imposing an error-output cutoff or truncating the original cause. Native failures are not retried through the fallback provider.
+
 ## 0.1.1
 
 - Accept valid WordPress plugin/theme basenames, including leading underscores, spaces and Unicode. Retain rejection of traversal, path separators and control characters; exceptional plugin names cannot be interpreted as WP-CLI options.

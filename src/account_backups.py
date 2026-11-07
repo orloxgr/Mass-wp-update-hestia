@@ -114,6 +114,13 @@ def zip_tree(archive,source,kind):
 
 
 def zip_database(archive,request):
+    if request.get('database_source') == 'hestia':
+        with archive.open('database.sql', 'w', force_zip64=True) as output:
+            count = 0
+            for block in iter(lambda: sys.stdin.buffer.read(1024 * 1024), b''):
+                output.write(block); count += len(block)
+            if not count: raise ValueError('Hestia database export is empty')
+        return
     probe = subprocess.run([request['php'], '-r', php_cli.DISABLED_FUNCTIONS], capture_output=True, text=True)
     if probe.returncode:
         raise RuntimeError('Could not read database export PHP CLI configuration: ' + (probe.stderr or probe.stdout))
@@ -133,8 +140,7 @@ def zip_database(archive,request):
                         if key.data=='data':output.write(data);count+=len(data)
                         else:
                             errors.extend(data)
-                            if len(errors)>4*1024*1024:raise ValueError('Database export error output exceeded 4 MiB')
-            if process.wait()!=0:raise ValueError('Database export failed: '+errors.decode(errors='replace')[-3000:])
+            if process.wait()!=0:raise ValueError('Database export failed: '+errors.decode(errors='replace'))
             if not count:raise ValueError('Database export is empty')
         except Exception:
             process.kill();process.wait();raise

@@ -2,6 +2,6 @@
   "id": "mass-wp-update-hestia",
   "slug": "mass-wp-update",
   "title": "Mass WP Update",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "command": "v-mass-wp-update-hestia"
 }

@@ -75,7 +75,7 @@ Let active jobs finish first. Reinstalling restores access to the retained data.
 
 Account and domain discovery uses Hestia's existing CLI and its resolved document roots, including nested installations. Old migration copies elsewhere in account homes are not scanned. Site names in both tabs open the matching site URL in a new tab. SSL domains use HTTPS; other domains use HTTP.
 
-Account and domain discovery uses Hestia's existing CLI. Each WordPress process runs with that hosting account's Unix UID and the domain's native Hestia PHP runtime. Suspended accounts are skipped. Account ownership or unsupported WordPress layouts produce an error instead of falling back to root. WordPress commands, database exports, and file backups never execute as root.
+Account and domain discovery uses Hestia's existing CLI. Each WordPress process runs with that hosting account's Unix UID and the domain's native Hestia PHP runtime. Suspended accounts are skipped. Account ownership or unsupported WordPress layouts produce an error instead of falling back to root. WordPress commands and file backup writers never execute as root. Native database exports run through Hestia's root-managed database CLI; WordPress/PHP is not executed as root.
 
 System paths must be owned by UID 0 and must not be writable by other users. Group-writable paths are accepted only for GID 0 when all explicit and primary-group members have UID 0. MySQL/MariaDB client discovery runs only for database exports, so it does not block site discovery or unrelated actions. Rejected paths report the exact component, ownership, permissions, and reason.
 
@@ -83,7 +83,9 @@ The plugin creates its own private data directory, a separate working directory 
 
 Background updates have no addon-imposed execution deadline or command-output cutoff; closing the browser does not stop them. Backup output reserves 256 MiB of available filesystem space. A command failure is recorded and stops the remaining actions for that site. Updates already completed on that site remain applied.
 
-Database exports use the selected domain's PHP CLI as the hosting account. If its `disable_functions` configuration disables WP-CLI's process dependencies (`exec`, `proc_open`, `proc_close`, `proc_get_status`), only those functions are restored for that individual database-export invocation. Every other restriction is retained. No PHP configuration file or web/FPM setting is changed.
+For databases registered to the site's Hestia account, database backups use the native [`v-dump-database USER DATABASE`](https://hestiacp.com/docs/reference/cli#v-dump-database) command and Hestia's database-server credentials. The database name, host and port read from WordPress must match that account's Hestia registration. The SQL is passed through a private open file descriptor to the hosting account's ZIP writer. No database password is passed in process arguments or saved in the manifest. Native export failure stops that site's updates; it is not hidden by retrying another export method.
+
+External or otherwise unmatched database connections retain WordPress's own connection through WP-CLI, using the selected domain's PHP CLI as the hosting account. Explicit socket paths are preserved. If PHP's `disable_functions` configuration disables WP-CLI's process dependencies (`exec`, `proc_open`, `proc_close`, `proc_get_status`), only those functions are restored for that individual fallback export invocation. Every other restriction is retained. No PHP configuration file, web/FPM setting or database credential is changed.
 
 Failures show a concise cause with expandable **Technical details** retaining the full original output. For example, an unresolvable database hostname points to `DB_HOST` and DNS; it does not make the addon choose a different database or report success.
 

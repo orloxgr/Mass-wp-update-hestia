@@ -12,6 +12,7 @@ import resource
 import signal
 import stat
 import subprocess
+import tempfile
 import time
 
 import state
@@ -93,7 +94,7 @@ def account_path():
     return ':'.join(directories + ENV['PATH'].split(':'))
 
 
-def run_as(account, arguments, cwd, timeout=None, output=None, database=False):
+def run_as(account, arguments, cwd, timeout=None, output=None, database=False, input_source=None):
     unix = pwd.getpwnam(account['owner'])
     if (unix.pw_uid == 0 or unix.pw_name == 'hestiaweb' or unix.pw_uid != account['uid'] or
             unix.pw_gid != account['gid'] or unix.pw_dir != account['home']):
@@ -110,7 +111,7 @@ def run_as(account, arguments, cwd, timeout=None, output=None, database=False):
         if cap <= 0: raise RuntimeError('Insufficient free space for a backup')
     def limits():
         if cap is not None: resource.setrlimit(resource.RLIMIT_FSIZE, (cap, cap))
-    with subprocess.Popen([str(a) for a in arguments], cwd=cwd, env=env, stdin=subprocess.DEVNULL,
+    with subprocess.Popen([str(a) for a in arguments], cwd=cwd, env=env, stdin=input_source if input_source is not None else subprocess.DEVNULL,
             stdout=output if output is not None else subprocess.PIPE, stderr=subprocess.PIPE,
             user=unix.pw_uid, group=unix.pw_gid, extra_groups=[], umask=0o077,
             start_new_session=True, preexec_fn=limits) as child:
@@ -172,11 +173,36 @@ def database_socket(site,cwd):
     return socket or ''
 
 
+def database_connection(site, cwd):
+    # Only connection identity is returned; database passwords never cross the
+    # WordPress process boundary or appear in arguments, manifests or logs.
+    code = "echo json_encode(array('name'=>DB_NAME,'host'=>DB_HOST,'port'=>(int)ini_get('mysqli.default_port')));"
+    connection = json.loads(wp(site, ['eval', code], cwd))
+    if (not isinstance(connection, dict) or set(connection) != {'name', 'host', 'port'} or
+            any(not isinstance(connection[key], str) or not connection[key] or
+                any(ord(c) < 32 for c in connection[key]) for key in ('name', 'host')) or
+            type(connection['port']) is not int):
+        raise ValueError('Cannot determine the WordPress database connection')
+    return connection
+
+
 def backup_task(site,operation,scratch,request,output=None):
     if operation not in ('prepare','archive','commit','prune','read','delete_site'):raise ValueError('Invalid account backup operation')
     payload={**request,'path':site['path']}
     database=operation=='archive' and request.get('kind')=='database'
-    if database:payload.update(php=site['php_bin'],wp=wp_cli(),socket=database_socket(site,scratch))
+    if database:
+        target = hestia.database_target(site['owner'], database_connection(site, scratch))
+        if target is not None:
+            # Hestia alone invokes its native dump. Pass an already-open private
+            # descriptor to the account ZIP writer; no root-written account path.
+            state.trusted(state.ROOT / 'backups', True)
+            with tempfile.TemporaryFile(dir=state.ROOT / 'backups') as sql:
+                hestia.dump_database(site['owner'], target, sql)
+                payload['database_source'] = 'hestia'
+                raw = run_as(site, ['/usr/bin/python3', '-I', '-B', SOURCE / 'account_backups.py',
+                             operation, site['home'], json.dumps(payload)], scratch, output=output, input_source=sql)
+            return json.loads(raw) if output is None else None
+        payload.update(php=site['php_bin'],wp=wp_cli(),socket=database_socket(site,scratch))
     raw=run_as(site,['/usr/bin/python3','-I','-B',SOURCE/'account_backups.py',operation,site['home'],json.dumps(payload)],
                scratch,output=output,database=database)
     return json.loads(raw) if output is None else None
