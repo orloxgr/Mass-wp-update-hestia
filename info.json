@@ -1,6 +1,6 @@
 {
   "name": "Mass WP Update for Hestia",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Update WordPress sites and manage a private premium plugin library.",
   "author": "Byron Iniotakis",
   "url": "https://github.com/orloxgr/Mass-wp-update-hestia"

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.4
+
+- Show Website N/total between the Activity heading and the current operation. The worker persists the current site position for update and backup jobs, including after refresh, without counting only successful sites.
+- Recover the counter for jobs started by earlier plugin versions without interrupting their pinned workers.
+
 ## 0.1.3
 
 - Move Update selected sites beside Refresh sites above the site list.

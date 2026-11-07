@@ -31,7 +31,7 @@
     <p class="mwu-help">Update and backup choices are saved automatically for future jobs.</p>
     <div class="mwu-toolbar"><button type="button" id="mwu-scan">Refresh sites</button><button type="button" class="mwu-primary" id="mwu-update">Update selected sites</button><span id="mwu-selection"></span><span id="mwu-site-count"></span></div>
     <section class="mwu-job" id="mwu-job" hidden aria-live="polite">
-      <h3>Activity</h3><p id="mwu-job-status"></p>
+      <h3>Activity</h3><p id="mwu-site-progress" hidden></p><p id="mwu-job-status"></p>
       <button type="button" id="mwu-stop" hidden>Stop after current site</button>
       <div id="mwu-results"></div>
     </section>

@@ -11,6 +11,8 @@ Update WordPress sites from the Hestia administrator panel and keep your premium
 
 Sites run one at a time. Selected backups finish before that site's updates begin; a failed backup stops updates for that site. Activity shows completed actions, skipped premium updates, errors, and backup downloads. **Previous updates & backups** keeps earlier results and downloads available. **Stop after current site** lets the current site finish before the next one starts.
 
+Activity shows **Website N/total** above the current operation, for example **Website 2/23** while updating a plugin on the second selected site. The position includes failed sites and is restored from the server after a page reload.
+
 **Update selected sites** is next to **Refresh sites** above the site list. All four update types, including themes, are enabled initially. Update checkboxes, backup checkboxes and the number of retained backups save automatically on the server and return after a reload or new login. Explicit choices, including disabling theme updates, are preserved. These are shared addon preferences for Hestia administrators; changing them affects future jobs, not a job already running. Selected sites are not remembered.
 
 Core updates include the WordPress database update, across the network for Multisite. Each row represents one WordPress installation; updates to a Multisite installation affect its shared files and network. Regular plugin updates exclude plugins registered in the premium library. Premium updates use your uploaded packages, apply only to matching installed plugins with an older version, and check their declared WordPress, PHP, and plugin dependencies. Plugins are not activated automatically.

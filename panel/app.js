@@ -258,6 +258,9 @@
   function drawJob(value) {
     job = value; byId('job').hidden = !job;
     if (!job) { updateControls(); return; }
+    const siteProgress = byId('site-progress');
+    siteProgress.hidden = job.kind !== 'update' || !Number.isInteger(job.site_total) || job.site_total < 1;
+    siteProgress.textContent = siteProgress.hidden ? '' : 'Website ' + job.site_index + '/' + job.site_total;
     byId('job-status').textContent = job.message;
     byId('stop').hidden = !active();
     byId('stop').textContent = job.kind === 'scan' ? 'Stop scan' : 'Stop after current site';

@@ -87,6 +87,7 @@ def start(kind, ids=None, options=None, premium=None, keep_backups=None):
     state.mkdir(path)
     state.save(path / 'request.json', request)
     job = dict(id=identity, kind=kind, state='queued', message='Queued', created=time.time(), results=[])
+    if kind == 'update': job.update(site_index=0, site_total=len(request['sites']))
     state.save(path / 'status.json', job)
     job['worker_script'] = str(Path(__file__).resolve())
     argv = ['/usr/bin/python3', '-I', '-B', job['worker_script'], '--worker', identity]
@@ -286,9 +287,12 @@ def worker(identity):
             job['results'] = result['errors']
         else:
             inventory = state.read(state.ROOT / 'inventory.json', {'sites': {}})
-            for site in request['sites']:
+            job['site_total'] = len(request['sites'])
+            for index, site in enumerate(request['sites'], 1):
                 if (path / 'cancel.json').exists():
                     job['state'] = 'cancelled'; break
+                job['site_index'] = index
+                progress('Processing ' + site['domain'])
                 result = update_site(site, request, path, progress)
                 inventory['sites'][site['id']] = site
                 state.save(state.ROOT / 'inventory.json', inventory)

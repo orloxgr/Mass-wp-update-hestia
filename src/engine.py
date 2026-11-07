@@ -24,6 +24,13 @@ FIELDS = {'status': set(), 'job_status': set(), 'scan': set(), 'update': {'sites
 
 def decorate_job(job):
     if job:
+        # Older pinned workers keep running after code upgrades. Recover their
+        # position from the immutable selected sites and recorded results.
+        if job.get('kind') == 'update' and 'site_total' not in job:
+            request = state.read(jobs.directory(job['id']) / 'request.json', {})
+            total = len(request.get('sites', []))
+            position = len(job.get('results', [])) + (1 if job.get('state') == 'running' else 0)
+            job.update(site_total=total, site_index=min(position, total))
         retired=state.read(state.ROOT/'retired-backups.json',{})
         for result in job.get('results',[]):
             diagnostics.decorate(result)

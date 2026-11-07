@@ -36,6 +36,29 @@ class HestiaTests(unittest.TestCase):
                 self.api('save_settings',options=invalid,keep_backups=2)
         self.assertEqual(jobs.settings(), saved['settings'])
 
+    def test_worker_persists_current_site_position_including_failed_sites(self):
+        identity='e'*32
+        path=state.ROOT/'jobs'/identity;state.mkdir(path)
+        sites=[dict(id='a'*32,domain='first.example.test'),dict(id='b'*32,domain='second.example.test')]
+        state.save(path/'request.json',dict(kind='update',sites=sites))
+        state.save(path/'status.json',dict(id=identity,kind='update',state='queued',message='Queued',results=[]))
+        legacy=engine.decorate_job(dict(id=identity,kind='update',state='running',results=[dict(state='failed')]))
+        self.assertEqual((legacy['site_index'],legacy['site_total']),(2,2))
+        seen=[]
+        def update(site, request, job_path, progress):
+            current=state.read(job_path/'status.json')
+            seen.append((current['site_index'],current['site_total']))
+            progress('Updating UltraCache on '+site['domain'])
+            current=state.read(job_path/'status.json')
+            self.assertEqual(current['message'],'Updating UltraCache on '+site['domain'])
+            self.assertEqual((current['site_index'],current['site_total']),seen[-1])
+            return dict(site=site['id'],state='failed' if site==sites[0] else 'complete')
+        with patch.object(jobs,'update_site',side_effect=update):jobs.worker(identity)
+        self.assertEqual(seen,[(1,2),(2,2)])
+        final=state.read(path/'status.json')
+        self.assertEqual((final['state'],final['site_index'],final['site_total']),('complete',2,2))
+        self.assertIn('1 failed site',final['message'])
+
     def test_temporary_job_options_do_not_overwrite_saved_preferences(self):
         choices={key:key!='themes' for key in jobs.OPTIONS}
         jobs.save_settings(choices,3)

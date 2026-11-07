@@ -43,3 +43,7 @@ Backend regressions cover account ownership, mismatched hosts/ports, explicit so
 Verified the installed native panel in a real browser: Refresh sites and Update selected sites share one row with the update button immediately to the right. Theme updates default to enabled. Changing update choices, backup choices and retention, including rapid checkbox changes, persists to server state and survives page reload. Explicitly disabled theme updates remain disabled. Test preferences were restored afterward; no WordPress update was run. There were no addon JavaScript errors.
 
 The 69 backend tests and seven PHP request checks pass. Preference regressions verify migration from retention-only settings, rejection of invalid values, preservation of preferences when a job uses different temporary options, and unchanged request data when preferences are edited during a job.
+
+## 0.1.4 Activity site counter
+
+A database-only job for the two dedicated VM installations completed through the native panel. Browser inspection confirmed Website 2/2 between Activity and the operation message, including after reload, with no addon JavaScript errors. The 70 backend tests and seven PHP request checks pass. Worker regression checks observe positions 1/2 and 2/2 during plugin-update progress, including a failed first site; a legacy running job also recovers its position from its request and results.
