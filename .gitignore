@@ -4,3 +4,10 @@ __pycache__/
 dist/
 private/
 build/
+*.zip
+*.phar
+*.sql
+*.pem
+*.key
+.env
+.env.*
