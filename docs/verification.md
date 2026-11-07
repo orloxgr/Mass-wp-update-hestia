@@ -37,3 +37,9 @@ A dedicated PHP CLI wrapper disabled process functions to reproduce database-exp
 The VMware Hestia installation exported the two dedicated test account's distinct registered databases through actual `v-dump-database` calls. Both completed with all PHP CLI process functions disabled. Each account-owned `database.zip` contained valid SQL for the expected database, matched its manifest checksum and had mode 600. Private descriptors delivered SQL to the account writers. CLI/FPM configuration checksums remained unchanged. After native installation, an authenticated panel job also completed database-only backups for both installations without running WordPress updates.
 
 Backend regressions cover account ownership, mismatched hosts/ports, explicit sockets, IPv6 and external fallback selection, native process failures, empty exports and exact SQL contents. A native failure never publishes a database ZIP or silently switches to WordPress export. Existing backup-failure tests verify that a failed selected backup prevents site updates and retains completed backup records.
+
+## 0.1.3 preferences and toolbar
+
+Verified the installed native panel in a real browser: Refresh sites and Update selected sites share one row with the update button immediately to the right. Theme updates default to enabled. Changing update choices, backup choices and retention, including rapid checkbox changes, persists to server state and survives page reload. Explicitly disabled theme updates remain disabled. Test preferences were restored afterward; no WordPress update was run. There were no addon JavaScript errors.
+
+The 69 backend tests and seven PHP request checks pass. Preference regressions verify migration from retention-only settings, rejection of invalid values, preservation of preferences when a job uses different temporary options, and unchanged request data when preferences are edited during a job.

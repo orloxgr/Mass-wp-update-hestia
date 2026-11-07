@@ -18,6 +18,22 @@ import state
 OPTIONS = ('core', 'plugins', 'premium', 'themes', 'backup_plugins', 'backup_themes', 'backup_database')
 
 
+def settings():
+    saved = state.read(state.ROOT / 'settings.json', {})
+    return dict(keep_backups=saved.get('keep_backups', 1),
+                options={key:saved.get('options', {}).get(key, True) for key in OPTIONS})
+
+
+def save_settings(options, keep_backups):
+    if not isinstance(options, dict) or set(options) != set(OPTIONS) or any(type(value) is not bool for value in options.values()):
+        raise ValueError('Invalid update or backup options')
+    if type(keep_backups) is not int or not 1 <= keep_backups <= 10:
+        raise ValueError('Choose 1 to 10 backups to keep')
+    saved = dict(options=options, keep_backups=keep_backups)
+    state.save(state.ROOT / 'settings.json', saved)
+    return saved
+
+
 def directory(identity):
     path = state.ROOT / 'jobs' / state.identity(identity)
     state.trusted(path, True)
@@ -80,7 +96,9 @@ def start(kind, ids=None, options=None, premium=None, keep_backups=None):
     job['pid'] = pid
     state.save(path / 'status.json', job)
     state.save(state.ROOT / 'latest.json', {'id': identity})
-    if kind=='update':state.save(state.ROOT/'settings.json',dict(keep_backups=keep_backups))
+    if kind=='update':
+        saved=settings();saved['keep_backups']=keep_backups
+        state.save(state.ROOT/'settings.json',saved)
     return job
 
 

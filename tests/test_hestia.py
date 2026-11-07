@@ -21,6 +21,35 @@ import state
 class HestiaTests(unittest.TestCase):
     setUp = backend.BackendTests.setUp
     tearDown = backend.BackendTests.tearDown
+    api = backend.BackendTests.api
+
+    def test_preferences_default_themes_on_and_remember_explicit_choices(self):
+        state.save(state.ROOT/'settings.json', dict(keep_backups=4))
+        self.assertEqual(jobs.settings(), dict(keep_backups=4,options={key:True for key in jobs.OPTIONS}))
+        choices={key:key not in ('themes','core','backup_themes') for key in jobs.OPTIONS}
+        saved=self.api('save_settings',options=choices,keep_backups=2)
+        self.assertEqual(saved['settings'], dict(options=choices,keep_backups=2))
+        with patch.object(host,'wp_cli',return_value='/usr/local/bin/wp'):
+            self.assertEqual(engine.status()['settings'], saved['settings'])
+        for invalid in (dict(choices,themes=1), dict(choices,unknown=True), {}):
+            with self.subTest(invalid=invalid),self.assertRaises(ValueError):
+                self.api('save_settings',options=invalid,keep_backups=2)
+        self.assertEqual(jobs.settings(), saved['settings'])
+
+    def test_temporary_job_options_do_not_overwrite_saved_preferences(self):
+        choices={key:key!='themes' for key in jobs.OPTIONS}
+        jobs.save_settings(choices,3)
+        site=dict(id='a'*32,owner='customer',domain='example.test')
+        state.save(state.ROOT/'inventory.json',dict(sites={site['id']:site}))
+        options={key:key=='backup_database' for key in jobs.OPTIONS}
+        with patch.object(jobs,'current',return_value=None),patch.object(os,'posix_spawn',return_value=1234):
+            job=jobs.start('update',[site['id']],options,keep_backups=3)
+        self.assertEqual(jobs.settings(),dict(options=choices,keep_backups=3))
+        request_path=jobs.directory(job['id'])/'request.json'
+        before=request_path.read_bytes()
+        self.api('save_settings',options={key:False for key in jobs.OPTIONS},keep_backups=5)
+        self.assertEqual(request_path.read_bytes(),before)
+
     def test_native_roots_and_suspended_domain(self):
         account = dict(user='customer', homedir='/home/customer', status=False)
         replies = [

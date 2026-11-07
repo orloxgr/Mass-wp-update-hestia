@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.3
+
+- Move Update selected sites beside Refresh sites above the site list.
+- Enable theme updates by default. Automatically save update, backup and retention choices on the server as controls change; restore explicit choices after reload or a new login.
+- Keep saved preferences separate from temporary job options, including premium-only updates. Changing preferences does not alter a running job's request.
+
 ## 0.1.2
 
 - Back up databases registered to the site's own Hestia account through native `v-dump-database`, using Hestia's server credentials rather than the application's dump credentials or PHP process functions. Match database name, host and port before choosing the native provider.

@@ -15,6 +15,7 @@ import hestia
 import diagnostics
 
 FIELDS = {'status': set(), 'job_status': set(), 'scan': set(), 'update': {'sites', 'options', 'premium','keep_backups'},
+          'save_settings': {'options', 'keep_backups'},
           'history': {'before'}, 'job_details': {'job'},
           'cancel': {'job'}, 'upload_begin': {'size', 'replace'},
           'upload_chunk': {'upload', 'part', 'offset'}, 'upload_finish': {'upload'}, 'upload_abort': {'upload'},
@@ -58,7 +59,7 @@ def status():
     try: host.wp_cli()
     except Exception as error: prerequisites = str(error)
     return dict(ok=True, inventory=inventory, packages=packages, job=job, prerequisites=prerequisites,
-                settings=state.read(state.ROOT/'settings.json',dict(keep_backups=1)))
+                settings=jobs.settings())
 
 
 def upload_path(identity):
@@ -76,6 +77,8 @@ def dispatch(request):
         raise ValueError('Unsupported action or parameters')
     if not state.read(state.ROOT / 'active.json', {}).get('active'): raise ValueError('The plugin is not active')
     if action == 'status': return status()
+    if action == 'save_settings':
+        return dict(ok=True, settings=jobs.save_settings(request.get('options'),request.get('keep_backups')))
     if action == 'job_status': return dict(ok=True, job=decorate_job(jobs.current()))
     if action == 'job_details': return dict(ok=True, job=decorate_job(state.read(jobs.directory(request.get('job')) / 'status.json')))
     if action == 'history':

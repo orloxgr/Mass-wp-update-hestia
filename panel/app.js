@@ -6,7 +6,7 @@
   const byId = id => document.getElementById('mwu-' + id);
   const options = ['core','plugins','premium','themes','backup_plugins','backup_themes','backup_database'];
   let snapshot = null, job = null, timer = null, uploading = false, resultsSignature = '';
-  let historyCursor = null, retentionLoaded = false, deleting = false;
+  let historyCursor = null, settingsLoaded = false, deleting = false, settingsQueue = Promise.resolve();
   const selected = new Set();
   const demo = root.dataset.demo === '1';
   function element(tag, text, className) {
@@ -42,11 +42,11 @@
     }
     return box;
   }
-  async function request(payload, chunk) {
+  async function request(payload, chunk, keepalive = false) {
     const body = new FormData();
     body.append('token', root.dataset.token); body.append('payload', JSON.stringify(payload));
     if (chunk) body.append('chunk', chunk, 'chunk.bin');
-    const response = await fetch(window.location.href, {method:'POST',credentials:'same-origin',headers:{'X-MWU-Request':'1'},body,cache:'no-store'});
+    const response = await fetch(window.location.href, {method:'POST',credentials:'same-origin',headers:{'X-MWU-Request':'1'},body,cache:'no-store',keepalive});
     let result;
     try { result = await response.json(); }
     catch (error) { throw new Error('The panel returned an unexpected response. Reload the page and check the job status before retrying.'); }
@@ -73,9 +73,17 @@
     if (premiumOnly) { result.core = false; result.plugins = false; result.themes = false; result.premium = true; }
     return result;
   }
+  function saveSettings() {
+    if (demo || !settingsLoaded) return;
+    const payload = {action:'save_settings',options:choices(),keep_backups:Number(byId('keep-backups').value)};
+    settingsQueue = settingsQueue.then(() => request(payload, null, true)).catch(error => {
+      message('Could not save preferences: ' + error.message, true);
+    });
+  }
   async function run(ids, premium = null) {
     byId('error').hidden = true;
     try {
+      await settingsQueue;
       const result = await request({action:'update',sites:ids,options:choices(premium !== null),premium,keep_backups:Number(byId('keep-backups').value)});
       setTab('updates'); drawJob(result.job); schedule();
     } catch (error) { message(error.message, true); }
@@ -308,7 +316,11 @@
   }
   async function load() {
     snapshot = await request({action:'status'});
-    if (!retentionLoaded) { byId('keep-backups').value = String(snapshot.settings.keep_backups); retentionLoaded = true; }
+    if (!settingsLoaded) {
+      byId('keep-backups').value = String(snapshot.settings.keep_backups);
+      for (const key of options) root.querySelector('[data-option="' + key + '"]').checked = snapshot.settings.options[key];
+      settingsLoaded = true;
+    }
     renderSites(); renderPackages(); drawJob(snapshot.job);
     if (snapshot.prerequisites) message(snapshot.prerequisites, true);
     await history();
@@ -339,6 +351,7 @@
     syncSelection();
   });
   byId('update').addEventListener('click', () => run([...selected]));
+  root.querySelectorAll('[data-option], #mwu-keep-backups').forEach(input => input.addEventListener('change', saveSettings));
   byId('stop').addEventListener('click', async () => {
     try { const result = await request({action:'cancel',job:job.id}); message(result.message); }
     catch (error) { message(error.message, true); }
