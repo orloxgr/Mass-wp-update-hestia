@@ -16,6 +16,7 @@ import time
 
 import state
 import hestia
+import php_cli
 
 SOURCE = Path(__file__).resolve().parent
 PANEL_PHP = hestia.ROOT / 'php/bin/php'
@@ -149,13 +150,16 @@ def account_task(account, operation, cwd, path=None, output=None):
 
 def wp(site, args, cwd, timeout=None, output=None):
     account_task(site, 'check', cwd, site['path'])
+    flags = []
     if args[:2] == ['db', 'export']:
         # WP-CLI intentionally skips client option files. Match PHP's local
         # socket when DB_HOST is localhost; preserve explicit remote/socket hosts.
         socket=database_socket(site,cwd)
         if socket:args=[*args,'--socket='+socket]
+        disabled = json.loads(run_as(site, [site['php_bin'], '-r', php_cli.DISABLED_FUNCTIONS], cwd))
+        flags = php_cli.database_flags(disabled)
     # This process is already the account UID before PHP or wp-config.php loads.
-    return run_as(site, [site['php_bin'], wp_cli(), '--path=' + site['path'], '--skip-plugins',
+    return run_as(site, [site['php_bin'], *flags, wp_cli(), '--path=' + site['path'], '--skip-plugins',
         '--skip-themes', '--skip-packages', '--no-color', *args], cwd, timeout, output, database=args[:2] == ['db', 'export'])
 
 
@@ -242,11 +246,16 @@ def inventory(site, cwd):
     for plugin in value['plugins']:
         if not isinstance(plugin, dict): raise ValueError('Invalid plugin inventory')
         if not isinstance(plugin.get('file'), str) or len(plugin['file'].split('/')) not in (1, 2): raise ValueError('Unsupported plugin layout')
-        for piece in plugin['file'].split('/'): catalog.component(piece)
+        try:
+            for piece in plugin['file'].split('/'): catalog.component(piece)
+        except ValueError as error:
+            raise ValueError('Invalid plugin file ' + repr(plugin['file']) + ': ' + str(error)) from error
         if not isinstance(plugin.get('version'), str) or len(plugin['version']) > 128: raise ValueError('Invalid installed plugin version')
     for theme in value['themes']:
         if not isinstance(theme, dict) or not isinstance(theme.get('version'), str): raise ValueError('Invalid theme inventory')
-        catalog.component(theme['slug'])
+        try: catalog.component(theme['slug'])
+        except ValueError as error:
+            raise ValueError('Invalid theme directory ' + repr(theme['slug']) + ': ' + str(error)) from error
     return value
 
 

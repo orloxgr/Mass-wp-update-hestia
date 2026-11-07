@@ -12,6 +12,7 @@ import state
 import transport
 import account_backups
 import hestia
+import diagnostics
 
 FIELDS = {'status': set(), 'job_status': set(), 'scan': set(), 'update': {'sites', 'options', 'premium','keep_backups'},
           'history': {'before'}, 'job_details': {'job'},
@@ -24,6 +25,7 @@ def decorate_job(job):
     if job:
         retired=state.read(state.ROOT/'retired-backups.json',{})
         for result in job.get('results',[]):
+            diagnostics.decorate(result)
             if result.get('backup_storage',{}).get('location') in retired:result['backup_removed']=True
     return job
 
@@ -39,6 +41,8 @@ def retire(site,removed):
 
 def status():
     inventory = state.read(state.ROOT / 'inventory.json', dict(sites={}, errors=[]))
+    for item in [*inventory['sites'].values(), *inventory.get('errors', [])]:
+        diagnostics.decorate(item)
     packages = list(catalog.entries().values())
     for package in packages:
         package['sites'] = []
@@ -48,6 +52,7 @@ def status():
                 package['sites'].append(dict(id=site['id'], domain=site['domain'], url=site.get('url', ''), owner=site['owner'],
                     version=plugin['version'], newer=not catalog.awaiting_zip(package) and host.compare(package['version'], plugin['version']) > 0,
                     error=site.get('error', '')))
+                diagnostics.decorate(package['sites'][-1])
     job = decorate_job(jobs.current())
     prerequisites = ''
     try: host.wp_cli()

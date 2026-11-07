@@ -13,7 +13,7 @@ def build():
     version = json.loads((ROOT / 'info.json').read_text(encoding='utf-8'))['version']
     output = ROOT / 'dist'; output.mkdir(exist_ok=True)
     target = output / ('mass-wp-update-hestia-' + version + '.zip')
-    paths = [ROOT / name for name in ('addon.json', 'info.json', 'LICENSE', 'README.md', 'UPSTREAM')]
+    paths = [ROOT / name for name in ('addon.json', 'info.json', 'LICENSE', 'README.md', 'UPSTREAM', 'CHANGELOG.md')]
     for folder in ('src', 'panel', 'tools', 'docs'):
         paths += [path for path in (ROOT / folder).rglob('*') if path.is_file() and
                   '__pycache__' not in path.parts and path.suffix not in ('.pyc', '.zip', '.phar')]

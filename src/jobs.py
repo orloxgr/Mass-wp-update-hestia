@@ -169,7 +169,15 @@ def regular_plugin_updates(site, scratch, inventory, packages, progress, result)
             continue
         progress('Updating ' + installed[file]['name'] + ' on ' + site['domain'])
         try:
-            host.wp(site, ['plugin', 'update', slug], scratch)
+            if slug.startswith('-'):
+                # WP-CLI does not treat -- as an end-of-options separator.
+                # Pass exceptional basenames through its positional API, so
+                # a directory named --all can never become an updater option.
+                encoded = base64.b64encode(slug.encode()).decode()
+                code = 'WP_CLI::get_runner()->run_command(array("plugin","update",base64_decode("' + encoded + '")),array());'
+                host.wp(site, ['eval', code], scratch)
+            else:
+                host.wp(site, ['plugin', 'update', slug], scratch)
             result['actions'].append(installed[file]['name'])
         except RuntimeError as error:
             if not needs_premium_package(error) or len(file.split('/')) != 2:

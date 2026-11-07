@@ -83,6 +83,10 @@ The plugin creates its own private data directory, a separate working directory 
 
 Background updates have no addon-imposed execution deadline or command-output cutoff; closing the browser does not stop them. Backup output reserves 256 MiB of available filesystem space. A command failure is recorded and stops the remaining actions for that site. Updates already completed on that site remain applied.
 
+Database exports use the selected domain's PHP CLI as the hosting account. If its `disable_functions` configuration disables WP-CLI's process dependencies (`exec`, `proc_open`, `proc_close`, `proc_get_status`), only those functions are restored for that individual database-export invocation. Every other restriction is retained. No PHP configuration file or web/FPM setting is changed.
+
+Failures show a concise cause with expandable **Technical details** retaining the full original output. For example, an unresolvable database hostname points to `DB_HOST` and DNS; it does not make the addon choose a different database or report success.
+
 ## Development
 
 Run backend tests as root on a disposable Linux Hestia test installation; they use isolated temporary data and the native `hestiaweb` Unix identity.

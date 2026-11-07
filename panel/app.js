@@ -31,6 +31,17 @@
     target.textContent = text || ''; target.hidden = !text;
     if (error) byId('notice').hidden = true;
   }
+  function errorView(item) {
+    const raw = item.error || '', summary = item.error_summary || raw.split('\n')[0];
+    const box = element('div', undefined, 'mwu-error-info');
+    box.append(element('div', summary, 'mwu-failure'));
+    if (raw !== summary || raw.includes('\n')) {
+      const details = element('details', undefined, 'mwu-error-details');
+      details.append(element('summary', 'Technical details'), element('pre', raw));
+      box.append(details);
+    }
+    return box;
+  }
   async function request(payload, chunk) {
     const body = new FormData();
     body.append('token', root.dataset.token); body.append('payload', JSON.stringify(payload));
@@ -81,7 +92,10 @@
       check.addEventListener('change', () => { if (check.checked) selected.add(site.id); else selected.delete(site.id); syncSelection(); });
       cell.append(check); row.append(cell);
       const name = element('td'), title = element('strong'); title.append(siteLink(site)); name.append(title, element('div', site.path, 'mwu-path')); row.append(name);
-      row.append(element('td', site.owner), element('td', site.core || '—'), element('td', site.php || '—'), element('td', site.error || (site.multisite ? 'Ready · Multisite' : 'Ready'), site.error ? 'mwu-failure' : ''));
+      row.append(element('td', site.owner), element('td', site.core || '—'), element('td', site.php || '—'));
+      const status = element('td', undefined, 'mwu-site-status');
+      status.append(site.error ? errorView(site) : element('span', site.multisite ? 'Ready · Multisite' : 'Ready'));
+      row.append(status);
       const backups = element('td'), remove = element('button', 'Delete backups'); remove.type = 'button'; remove.dataset.deleteBackups = site.id;
       remove.setAttribute('aria-label', 'Delete backups for ' + site.domain);
       remove.addEventListener('click', () => deleteBackups(site)); backups.append(remove); row.append(backups);
@@ -90,7 +104,9 @@
     if (!sites.length) { const row = element('tr'), cell = element('td', 'No sites listed yet. Click Refresh sites to discover WordPress installations.'); cell.colSpan = 7; row.append(cell); body.append(row); }
     byId('site-count').textContent = sites.length + ' WordPress site(s)' + (snapshot.inventory.scanned_at ? ' · Last scan: ' + new Date(snapshot.inventory.scanned_at * 1000).toLocaleString() : '');
     const errors = byId('discovery-errors'); errors.replaceChildren();
-    for (const item of snapshot.inventory.errors || []) errors.append(element('p', item.owner + ': ' + item.error, 'mwu-failure'));
+    for (const item of snapshot.inventory.errors || []) {
+      const box = element('div'); box.append(element('strong', item.owner), errorView(item)); errors.append(box);
+    }
     syncSelection();
   }
   async function deleteBackups(site) {
@@ -158,7 +174,7 @@
         if (!check.disabled) eligible.push(check);
         check.addEventListener('change', updateControls);
         label.append(check, siteLink(site), element('span', ' · ' + site.owner + ' · Installed ' + site.version));
-        if (site.error) label.append(element('span', site.error, 'mwu-failure'));
+        if (site.error) label.append(errorView(site));
         else if (!site.newer) label.append(element('span', waiting ? 'Awaiting ZIP' : 'Current or newer', 'mwu-badge'));
         details.append(label);
       }
@@ -252,7 +268,7 @@
         if (item.actions && item.actions.length) box.append(element('p', 'Completed: ' + item.actions.join(', ')));
         if (item.state === 'complete' && !item.actions.length) box.append(element('p', 'Completed. No update was needed.'));
         if (item.skipped && item.skipped.length) { const list = element('details'), title = element('summary', 'Premium plugin details'); list.append(title, element('p', item.skipped.join('\n'))); box.append(list); }
-        if (item.error) box.append(element('pre', item.error));
+        if (item.error) box.append(errorView(item));
         if (item.backup_storage) box.append(element('p', item.backup_storage.directory, 'mwu-path'));
         for (const warning of item.warnings || []) box.append(element('p', warning));
         if (item.backup_removed) box.append(element('p', 'Backups removed by retention or an administrator.'));

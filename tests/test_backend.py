@@ -226,7 +226,7 @@ class BackendTests(unittest.TestCase):
         for connection, expected in (({'host':'localhost','socket':'/run/database/mysql.sock'},True),
                                      ({'host':'database.example.test:3307','socket':'/run/database/mysql.sock'},False)):
             with patch.object(host, 'account_task'), patch.object(host, 'wp_cli', return_value='/usr/local/bin/wp'), \
-                 patch.object(host, 'run_as', side_effect=[json.dumps(connection),'']) as command:
+                 patch.object(host, 'run_as', side_effect=[json.dumps(connection),json.dumps(''),'']) as command:
                 host.wp(site,['db','export','-','--quiet'],self.base)
                 arguments = command.call_args.args[1]
                 self.assertEqual('--socket=/run/database/mysql.sock' in arguments,expected)

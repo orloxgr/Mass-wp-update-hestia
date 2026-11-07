@@ -7,3 +7,8 @@
 .mwu .mwu-error{color:#812335}
 .mwu .mwu-result,.mwu .mwu-result strong,.mwu .mwu-result p,.mwu .mwu-result pre{color:#174a32}
 .mwu .mwu-result.failed,.mwu .mwu-result.failed strong,.mwu .mwu-result.failed p,.mwu .mwu-result.failed pre{color:#812335}
+.mwu .mwu-site-status{min-width:200px;max-width:360px;overflow-wrap:anywhere}
+.mwu .mwu-error-info{overflow-wrap:anywhere;min-width:0}
+.mwu .mwu-error-details{margin-top:8px;font-size:12px}
+.mwu .mwu-error-details summary{cursor:pointer}
+.mwu .mwu-error-details pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:240px;overflow:auto;max-width:100%;margin-top:8px}

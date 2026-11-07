@@ -25,3 +25,9 @@ Verified in a disposable VMware Hestia 1.10.6 installation with PHP 8.3 and Mari
 - **Stop after current site** completes that site's backup and does not start the next installation.
 
 Updates are tested actions rather than a guarantee that third-party WordPress code cannot fail. A failed selected backup prevents that site's updates; completed actions remain recorded. Unsupported custom WordPress content-directory layouts are reported before changes.
+
+## 0.1.1 regressions
+
+Verified real WordPress inventory with underscore-prefixed main files, spaces and Unicode. A plugin directory named `--all` was passed as a positional plugin identity rather than a bulk-update option.
+
+A dedicated PHP CLI wrapper disabled process functions to reproduce database-export failure. The corrected direct export and actual account-owned database ZIP completed, with valid SQL, the hosting UID and CLI SAPI. Other restrictions remained active, and CLI/FPM php.ini checksums remained unchanged. A real failing mysqli DNS request retained its complete trace while producing a concise database-host diagnosis.

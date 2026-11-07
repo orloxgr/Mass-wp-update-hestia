@@ -17,6 +17,7 @@ import zipfile
 sys.dont_write_bytecode = True
 sys.path.insert(0,str(Path(__file__).resolve().parent))
 import account_task
+import php_cli
 
 FILES = {'plugins.zip','themes.zip','database.zip'}
 SNAPSHOT = re.compile(r'[0-9a-f]{32}/[0-9]{4}/[0-9]{2}/[0-9]{2}/[0-9]{6}-[0-9a-f]{32}\Z')
@@ -113,7 +114,11 @@ def zip_tree(archive,source,kind):
 
 
 def zip_database(archive,request):
-    args=[request['php'],request['wp'],'--path='+request['path'],'--skip-plugins','--skip-themes','--skip-packages','--no-color','db','export','-','--quiet']
+    probe = subprocess.run([request['php'], '-r', php_cli.DISABLED_FUNCTIONS], capture_output=True, text=True)
+    if probe.returncode:
+        raise RuntimeError('Could not read database export PHP CLI configuration: ' + (probe.stderr or probe.stdout))
+    flags = php_cli.database_flags(json.loads(probe.stdout))
+    args=[request['php'],*flags,request['wp'],'--path='+request['path'],'--skip-plugins','--skip-themes','--skip-packages','--no-color','db','export','-','--quiet']
     if request.get('socket'):args.append('--socket='+request['socket'])
     errors=bytearray()
     with subprocess.Popen(args,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.PIPE) as process:
