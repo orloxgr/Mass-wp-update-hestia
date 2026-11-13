@@ -13,13 +13,14 @@ import time
 
 import catalog
 import host
+import hestia
 import state
 
 OPTIONS = ('core', 'plugins', 'premium', 'themes', 'backup_plugins', 'backup_themes', 'backup_database')
 
 
 def settings():
-    saved = state.read(state.ROOT / 'settings.json', {})
+    saved = state.read(state.data_root() / 'settings.json', {})
     return dict(keep_backups=saved.get('keep_backups', 1),
                 options={key:saved.get('options', {}).get(key, True) for key in OPTIONS})
 
@@ -30,7 +31,7 @@ def save_settings(options, keep_backups):
     if type(keep_backups) is not int or not 1 <= keep_backups <= 10:
         raise ValueError('Choose 1 to 10 backups to keep')
     saved = dict(options=options, keep_backups=keep_backups)
-    state.save(state.ROOT / 'settings.json', saved)
+    state.save(state.data_root() / 'settings.json', saved)
     return saved
 
 
@@ -40,8 +41,34 @@ def directory(identity):
     return path
 
 
-def current():
-    identity = state.read(state.ROOT / 'latest.json', {}).get('id')
+def inventory_snapshot():
+    value = state.read(state.data_root() / 'inventory.json')
+    if value is None:
+        value = state.read(state.ROOT / 'inventory.json', dict(sites={}, errors=[]))
+    if state.account() is not None:
+        value['sites'] = {key:site for key,site in value.get('sites', {}).items() if site.get('owner') == state.account()}
+        value['errors'] = [item for item in value.get('errors', []) if item.get('owner') == state.account()]
+    return value
+
+
+def require_access(job):
+    if state.account() is not None:
+        request = state.read(directory(job['id']) / 'request.json', {})
+        if (job.get('scope') != state.account() or request.get('scope') != state.account()
+                or any(site.get('owner') != state.account() for site in request.get('sites', []))):
+            raise PermissionError('This job is not available to this account')
+    return job
+
+
+def visible_current():
+    if state.account() is None:
+        return current()
+    identity = state.read(state.data_root() / 'latest.json', {}).get('id')
+    return require_access(current(identity)) if identity else None
+
+
+def current(identity=None):
+    identity = identity or state.read(state.ROOT / 'latest.json', {}).get('id')
     if not identity: return None
     path = directory(identity)
     job = state.read(path / 'status.json')
@@ -63,16 +90,16 @@ def start(kind, ids=None, options=None, premium=None, keep_backups=None):
     previous = current()
     if previous and previous['state'] in ('queued', 'running'): raise ValueError('A job is already running; wait for it to finish')
     if kind not in ('scan', 'update'): raise ValueError('Invalid job kind')
-    source = state.read(state.ROOT / 'inventory.json', {'sites': {}})['sites']
+    source = inventory_snapshot()['sites']
     packages = catalog.entries()
-    request = dict(kind=kind)
+    request = dict(kind=kind, scope=state.account())
     if kind == 'update':
         if not isinstance(ids, list) or not ids or any(not isinstance(i, str) or i not in source for i in ids):
             raise ValueError('Select sites from the current inventory')
         if not isinstance(options, dict) or set(options) != set(OPTIONS) or any(type(v) is not bool for v in options.values()):
             raise ValueError('Invalid update or backup options')
         if not any(options.values()): raise ValueError('Choose at least one update or backup action')
-        if keep_backups is None:keep_backups=state.read(state.ROOT/'settings.json',{}).get('keep_backups',1)
+        if keep_backups is None:keep_backups=state.read(state.data_root()/'settings.json',{}).get('keep_backups',1)
         if type(keep_backups) is not int or not 1<=keep_backups<=10:raise ValueError('Choose 1 to 10 backups to keep')
         if premium is not None:
             catalog.component(premium)
@@ -86,7 +113,7 @@ def start(kind, ids=None, options=None, premium=None, keep_backups=None):
     path = state.ROOT / 'jobs' / identity
     state.mkdir(path)
     state.save(path / 'request.json', request)
-    job = dict(id=identity, kind=kind, state='queued', message='Queued', created=time.time(), results=[])
+    job = dict(id=identity, kind=kind, state='queued', message='Queued', created=time.time(), results=[], scope=state.account())
     if kind == 'update': job.update(site_index=0, site_total=len(request['sites']))
     state.save(path / 'status.json', job)
     job['worker_script'] = str(Path(__file__).resolve())
@@ -97,9 +124,11 @@ def start(kind, ids=None, options=None, premium=None, keep_backups=None):
     job['pid'] = pid
     state.save(path / 'status.json', job)
     state.save(state.ROOT / 'latest.json', {'id': identity})
+    if state.account() is not None:
+        state.save(state.data_root() / 'latest.json', {'id': identity})
     if kind=='update':
         saved=settings();saved['keep_backups']=keep_backups
-        state.save(state.ROOT/'settings.json',saved)
+        state.save(state.data_root()/'settings.json',saved)
     return job
 
 
@@ -242,13 +271,15 @@ def update_site(site, request, path, progress):
                     result.setdefault('pending_premium', []).append(record['name'])
             for record in plan:
                 progress('Updating ' + record['name'] + ' on ' + site['domain'])
-                source = catalog.package(record)
                 target = scratch / (record['slug'] + '-' + record['version'] + '.zip')
                 fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o400)
-                with os.fdopen(fd, 'wb') as output, source.open('rb') as package:
+                with os.fdopen(fd, 'wb') as output, catalog.open_package(record) as source, source.open('rb') as package:
                     for block in iter(lambda: package.read(1024 * 1024), b''): output.write(block)
                     os.fchown(output.fileno(), site['uid'], site['gid'])
-                host.wp(site, ['plugin', 'install', str(target), '--force'], scratch)
+                decision = host.install_premium(site, record, target, scratch)
+                if not decision['installed']:
+                    result['skipped'].append(record['name'] + ': ' + decision['reason'])
+                    continue
                 verified = host.inventory(site, scratch)
                 actual = next((p for p in verified['plugins'] if p['file'] == record['plugin_file']), None)
                 if not actual or host.compare(actual['version'], record['version']) != 0:
@@ -273,29 +304,42 @@ def update_site(site, request, path, progress):
 def worker(identity):
     path = directory(identity)
     request = state.read(path / 'request.json')
+    with state.scoped(request.get('scope')):
+        return run_worker(identity)
+
+
+def run_worker(identity):
+    path = directory(identity)
+    request = state.read(path / 'request.json')
     job = state.read(path / 'status.json')
+    def authorize():
+        if state.account() is not None:
+            hestia.authorize(state.account(), False)
+            require_access(job)
     def progress(message):
+        authorize()
         if request['kind'] == 'scan' and (path / 'cancel.json').exists(): raise InterruptedError('Scan stopped')
         job.update(state='running', message=message)
         state.save(path / 'status.json', job)
     try:
         progress('Discovering sites' if request['kind'] == 'scan' else 'Starting updates')
         if request['kind'] == 'scan':
-            result = host.discover(progress)
+            result = host.discover(progress) if state.account() is None else host.discover(progress, state.account())
             result['scanned_at'] = time.time()
-            state.save(state.ROOT / 'inventory.json', result)
+            state.save(state.data_root() / 'inventory.json', result)
             job['results'] = result['errors']
         else:
-            inventory = state.read(state.ROOT / 'inventory.json', {'sites': {}})
+            inventory = inventory_snapshot()
             job['site_total'] = len(request['sites'])
             for index, site in enumerate(request['sites'], 1):
+                authorize()
                 if (path / 'cancel.json').exists():
                     job['state'] = 'cancelled'; break
                 job['site_index'] = index
                 progress('Processing ' + site['domain'])
                 result = update_site(site, request, path, progress)
                 inventory['sites'][site['id']] = site
-                state.save(state.ROOT / 'inventory.json', inventory)
+                state.save(state.data_root() / 'inventory.json', inventory)
                 job['results'].append(result)
                 state.save(path / 'status.json', job)
             else: job['state'] = 'complete'
@@ -312,7 +356,7 @@ def worker(identity):
 
 if __name__ == '__main__':
     import sys
-    if os.geteuid() != 0 or len(sys.argv) != 3 or sys.argv[1] != '--worker': raise SystemExit('Use the authenticated Hestia administrator panel')
+    if os.geteuid() != 0 or len(sys.argv) != 3 or sys.argv[1] != '--worker': raise SystemExit('Use the authenticated Hestia panel')
     # Wait until the launching request has durably recorded its PID.
     with state.locked():
         if not state.read(state.ROOT / 'active.json', {}).get('active'): raise SystemExit('Plugin is inactive')

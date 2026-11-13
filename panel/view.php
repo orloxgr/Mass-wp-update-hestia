@@ -1,10 +1,11 @@
 <?php if (!defined('MASSWP_PANEL')) { http_response_code(403); exit; } ?>
 <style><?php require __DIR__ . '/style.css'; ?></style>
-<div class="mwu" id="mwu" data-token="<?= $escape($csrf) ?>" data-demo="<?= $demo ? '1' : '0' ?>">
+<div class="mwu" id="mwu" data-token="<?= $escape($csrf) ?>" data-demo="<?= $demo ? '1' : '0' ?>" data-admin="<?= $isAdmin ? '1' : '0' ?>">
   <h2>Mass WP Update</h2>
-  <p>Update your WordPress sites from one place and manage the premium plugin ZIPs you use.</p>
+  <p><?= $isAdmin ? 'Update WordPress sites across hosting accounts and manage the administrator premium library.' : 'Update your own WordPress sites and manage your personal premium plugin library. Other accounts and the administrator library are separate.' ?></p>
   <div id="mwu-error" class="mwu-message mwu-error" role="alert" hidden></div>
   <div id="mwu-notice" class="mwu-message" role="status" hidden></div>
+  <div id="mwu-busy" class="mwu-message" role="status" hidden>Another site maintenance job is running. You can start yours when it finishes.</div>
   <div class="mwu-tabs" role="tablist" aria-label="Mass WP Update">
     <button type="button" role="tab" id="mwu-tab-updates" aria-controls="mwu-updates" aria-selected="true">Updates</button>
     <button type="button" role="tab" id="mwu-tab-premium" aria-controls="mwu-premium" aria-selected="false" tabindex="-1">Premium plugins</button>
@@ -43,11 +44,12 @@
     </section>
   </section>
   <section id="mwu-premium" role="tabpanel" aria-labelledby="mwu-tab-premium" hidden>
+    <?php if (!$isAdmin) { ?><p>Your ZIPs are stored privately in your hosting account, outside website document roots: <code id="mwu-library-path"></code>. They can be used only on your own sites.</p><?php } ?>
     <p>Plugins whose automatic update explicitly requires a license or an unavailable update package appear here as <strong>Awaiting premium ZIP</strong>. Upload their matching ZIP to make the update available. Ordinary network failures are not classified as premium plugins.</p>
     <p>Select one or more installable plugin ZIPs. Each name and version is read from the plugin, so ZIP filenames do not matter.</p>
     <div class="mwu-toolbar"><button type="button" id="mwu-add">+ Add premium plugins</button><input type="file" id="mwu-add-file" accept=".zip,application/zip" multiple hidden><span id="mwu-upload-status" role="status"></span></div>
     <div id="mwu-upload-results" class="mwu-scroll" hidden aria-label="ZIP upload results"></div>
-    <p class="mwu-help">ZIPs stay in a private server directory. Replacing a ZIP updates the library; sites change only when you run an update. Maximum ZIP: 256 MiB; expanded contents: 1 GiB.</p>
+    <p class="mwu-help">ZIPs stay in <?= $isAdmin ? 'the private administrator library' : 'your private account library' ?>. Replacing a ZIP updates the library; sites change only when you run an update. Maximum ZIP: 256 MiB; expanded contents: 1 GiB.</p>
     <div class="mwu-scroll"><table><thead><tr><th>Plugin</th><th>Version</th><th>Replace ZIP</th><th>Sites</th><th>Delete</th></tr></thead><tbody id="mwu-packages"></tbody></table></div>
     <p class="mwu-help">Premium updates use the backup choices in the Updates tab and apply only to installed copies with an older version.</p>
   </section>

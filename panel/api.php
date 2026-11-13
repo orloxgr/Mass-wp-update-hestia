@@ -55,7 +55,7 @@ function mwu_bridge(array $request): array {
         if (is_file($responsePath)) unlink($responsePath);
     }
 }
-function mwu_api(string $actor, string $csrf, bool $demo): array {
+function mwu_api(string $actor, string $csrf, bool $demo, bool $isAdmin = false): array {
     if ($demo) throw new RuntimeException('Changes are unavailable in demo mode.');
     $token = $_POST['token'] ?? null;
     if (!is_string($token) || !hash_equals($csrf, $token)) throw new RuntimeException('Session expired. Reload this page and try again.');
@@ -87,7 +87,7 @@ function mwu_api(string $actor, string $csrf, bool $demo): array {
             $request['part'] = $identity;
         } elseif (!empty($_FILES)) throw new RuntimeException('Unexpected upload.');
         $request['actor'] = $actor;
-        $request['admin'] = true;
+        $request['admin'] = $isAdmin;
         return mwu_bridge($request);
     } finally {
         if ($part !== null && is_file($part)) unlink($part);

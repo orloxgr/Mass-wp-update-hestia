@@ -1,4 +1,4 @@
-"""Whitelisted administrator actions. Client input never becomes a command."""
+"""Native panel actions scoped to the authenticated Hestia account."""
 import base64
 import json
 import os
@@ -24,6 +24,7 @@ FIELDS = {'status': set(), 'job_status': set(), 'scan': set(), 'update': {'sites
 
 def decorate_job(job):
     if job:
+        jobs.require_access(job)
         # Older pinned workers keep running after code upgrades. Recover their
         # position from the immutable selected sites and recorded results.
         if job.get('kind') == 'update' and 'site_total' not in job:
@@ -35,6 +36,9 @@ def decorate_job(job):
         for result in job.get('results',[]):
             diagnostics.decorate(result)
             if result.get('backup_storage',{}).get('location') in retired:result['backup_removed']=True
+        if state.account() is not None:
+            job.pop('pid', None)
+            job.pop('worker_script', None)
     return job
 
 
@@ -48,7 +52,7 @@ def retire(site,removed):
 
 
 def status():
-    inventory = state.read(state.ROOT / 'inventory.json', dict(sites={}, errors=[]))
+    inventory = jobs.inventory_snapshot()
     for item in [*inventory['sites'].values(), *inventory.get('errors', [])]:
         diagnostics.decorate(item)
     packages = list(catalog.entries().values())
@@ -61,24 +65,30 @@ def status():
                     version=plugin['version'], newer=not catalog.awaiting_zip(package) and host.compare(package['version'], plugin['version']) > 0,
                     error=site.get('error', '')))
                 diagnostics.decorate(package['sites'][-1])
-    job = decorate_job(jobs.current())
+    job = decorate_job(jobs.visible_current())
+    running = jobs.current()
+    busy = bool(running and running['state'] in ('queued', 'running'))
     prerequisites = ''
     try: host.wp_cli()
     except Exception as error: prerequisites = str(error)
     return dict(ok=True, inventory=inventory, packages=packages, job=job, prerequisites=prerequisites,
-                settings=jobs.settings())
+                settings=jobs.settings(), busy=busy, administrator=state.account() is None,
+                library_path=host.library_location() if state.account() is not None else '')
 
 
 def upload_path(identity):
-    path = state.ROOT / 'uploads' / state.identity(identity)
+    path = state.data_root() / 'uploads' / state.identity(identity)
     state.trusted(path, True)
     return path
 
 
 def dispatch(request):
-    if request.get('admin') is not True:
-        raise PermissionError('Hestia administrator access is required')
-    hestia.administrator(request.get('actor'))
+    actor = hestia.authorize(request.get('actor'), request.get('admin'))
+    with state.scoped(None if request['admin'] else actor):
+        return scoped_dispatch(request)
+
+
+def scoped_dispatch(request):
     action = request.get('action')
     if action not in FIELDS or set(request) - ({'actor', 'admin', 'action'} | FIELDS[action]):
         raise ValueError('Unsupported action or parameters')
@@ -86,7 +96,10 @@ def dispatch(request):
     if action == 'status': return status()
     if action == 'save_settings':
         return dict(ok=True, settings=jobs.save_settings(request.get('options'),request.get('keep_backups')))
-    if action == 'job_status': return dict(ok=True, job=decorate_job(jobs.current()))
+    if action == 'job_status':
+        running = jobs.current()
+        return dict(ok=True, job=decorate_job(jobs.visible_current()),
+                    busy=bool(running and running['state'] in ('queued', 'running')))
     if action == 'job_details': return dict(ok=True, job=decorate_job(state.read(jobs.directory(request.get('job')) / 'status.json')))
     if action == 'history':
         before = request.get('before')
@@ -97,6 +110,8 @@ def dispatch(request):
         for path in (state.ROOT / 'jobs').iterdir():
             state.identity(path.name)
             value = state.read(jobs.directory(path.name) / 'status.json')
+            if state.account() is not None and value.get('scope') != state.account(): continue
+            jobs.require_access(value)
             if value['kind'] != 'update' or value['state'] in ('queued', 'running'): continue
             key = [value['created'], value['id']]
             if before is not None and key >= before: continue
@@ -112,8 +127,9 @@ def dispatch(request):
         current=jobs.current()
         if current and current['state'] in ('queued','running'):raise ValueError('Wait for the current job to finish before deleting backups')
         identity=state.identity(request.get('site'))
-        site=state.read(state.ROOT/'inventory.json',dict(sites={}))['sites'].get(identity)
+        site=jobs.inventory_snapshot()['sites'].get(identity)
         if not site:raise ValueError('Select a site from the current inventory')
+        host.refresh_site(site)
         scratch=host.work(site)
         try:result=host.backup_task(site,'delete_site',scratch,{})
         finally:host.cleanup(scratch)
@@ -128,6 +144,7 @@ def dispatch(request):
         current = jobs.current()
         if not current or current['id'] != request.get('job') or current['state'] not in ('queued', 'running'):
             raise ValueError('Select the currently running job')
+        jobs.require_access(current)
         state.save(jobs.directory(current['id']) / 'cancel.json', {'requested': time.time()})
         return dict(ok=True, message='Will stop before starting the next site')
     if action == 'upload_begin':
@@ -136,7 +153,7 @@ def dispatch(request):
         expected = request.get('replace')
         if expected is not None: catalog.component(expected)
         identity = secrets.token_hex(32)[:32]
-        path = state.ROOT / 'uploads' / identity; state.mkdir(path)
+        path = state.data_root() / 'uploads' / identity; state.mkdir(path)
         state.save(path / 'request.json', dict(size=size, replace=expected, received=0))
         state.write(path / 'data.zip', b'')
         return dict(ok=True, upload=identity)
@@ -178,6 +195,7 @@ def dispatch(request):
             raise ValueError('Invalid backup selection')
         job_path=jobs.directory(job)
         record=state.read(job_path/'status.json')
+        jobs.require_access(record)
         result=next((value for value in record.get('results',[]) if value.get('site')==site),None)
         if not result:raise ValueError('No backups recorded for this site and job')
         if result.get('backup_storage'):
@@ -188,6 +206,7 @@ def dispatch(request):
             expected=jobs.backup_record(expected,name)
             owner=next((value for value in state.read(job_path/'request.json')['sites'] if value['id']==site),None)
             if not owner:raise ValueError('No hosting account recorded for these backups')
+            host.refresh_site(owner)
             scratch=host.work(owner)
             try:
                 receipt=transport.prepare_download(writer=lambda output:host.backup_task(owner,'read',scratch,

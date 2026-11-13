@@ -27,15 +27,17 @@ require $root . '/web/inc/main.php';
 header('Cache-Control: no-store, private');
 header('X-Robots-Tag: noindex, nofollow');
 header('X-Content-Type-Options: nosniff');
-$actor = $_SESSION['user'] ?? '';
+$sessionActor = $_SESSION['user'] ?? '';
+$actor = !empty($_SESSION['look']) ? $_SESSION['look'] : $sessionActor;
 $csrf = $_SESSION['token'] ?? '';
 $actorData = get_user_data($actor)[$actor] ?? [];
 $isAdmin = ($actorData['ROLE'] ?? '') === 'admin' && empty($_SESSION['look']);
+$allowed = in_array($actorData['ROLE'] ?? '', ['admin', 'user'], true) && ($actorData['SUSPENDED'] ?? '') === 'no';
 $ajax = ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && ($_SERVER['HTTP_X_MWU_REQUEST'] ?? '') === '1';
-if (!$isAdmin || !is_string($csrf) || $csrf === '') {
+if (!$allowed || !is_string($csrf) || $csrf === '') {
     http_response_code(403);
-    if ($ajax) { header('Content-Type: application/json'); echo json_encode(['ok'=>false,'error'=>'Hestia administrator access is required.']); }
-    else { echo 'Hestia administrator access is required.'; }
+    if ($ajax) { header('Content-Type: application/json'); echo json_encode(['ok'=>false,'error'=>'An active Hestia account is required.']); }
+    else { echo 'An active Hestia account is required.'; }
     exit;
 }
 define('MASSWP_PANEL', true);
@@ -44,13 +46,13 @@ $demo = !empty($read_only);
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (($_POST['mwu_download'] ?? '') === '1') {
         ignore_user_abort(true);
-        try { mwu_send_download(mwu_api($actor, $csrf, $demo)); }
+        try { mwu_send_download(mwu_api($actor, $csrf, $demo, $isAdmin)); }
         catch (Throwable $error) { http_response_code(400); header('Content-Type: text/plain; charset=UTF-8'); echo $error->getMessage(); }
         exit;
     }
     if (!$ajax) { http_response_code(400); exit; }
     header('Content-Type: application/json; charset=UTF-8');
-    try { $result = mwu_api($actor, $csrf, $demo); }
+    try { $result = mwu_api($actor, $csrf, $demo, $isAdmin); }
     catch (Throwable $error) { $result = ['ok'=>false,'error'=>$error->getMessage()]; }
     echo json_encode($result, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE);
     exit;

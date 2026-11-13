@@ -1,5 +1,6 @@
 """Root-private application data and durable, no-follow writes."""
 import contextlib
+import contextvars
 import fcntl
 import grp
 import json
@@ -13,6 +14,32 @@ ROOT = Path('/var/lib/mass-wp-update-hestia')
 RUN = Path('/run/mass-wp-update-hestia')
 WORK = Path('/var/lib/mass-wp-update-hestia-work')
 DOWNLOADS = Path('/var/lib/mass-wp-update-hestia-downloads')
+_account = contextvars.ContextVar('masswp_account', default=None)
+
+
+def account():
+    return _account.get()
+
+
+def data_root():
+    return ROOT if account() is None else ROOT / 'accounts' / account()
+
+
+@contextlib.contextmanager
+def scoped(owner=None):
+    if owner is not None:
+        import re
+        if not isinstance(owner, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,63}', owner):
+            raise ValueError('Invalid account scope')
+        mkdir(ROOT / 'accounts')
+        mkdir(ROOT / 'accounts' / owner)
+        for name in ('packages', 'uploads'):
+            mkdir(ROOT / 'accounts' / owner / name)
+    token = _account.set(owner)
+    try:
+        yield
+    finally:
+        _account.reset(token)
 
 
 def root_group_only():

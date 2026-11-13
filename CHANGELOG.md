@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0
+
+- Keep version decisions in each site’s updater: accept any ZIP version in either library, apply only a newer version than the real installed plugin, and recheck inside the installing WP-CLI process. Manually upgraded sites are preserved while older sites in the same batch still update.
+
+- Open Mass WP Update to native hosting users with account-scoped discovery, updates, settings, job history, cancellation and backup access. Native ownership and suspension checks remain enforced in the root backend and background workers.
+- Add a personal premium library per hosting account, stored outside document roots in `~/.masswpupdate/premium/`. Upload, replacement, removal and updates use only that account’s ZIPs and sites; administrator and other users’ libraries remain separate. Home ZIP storage runs unprivileged, with no-follow paths, private permissions and checksum verification.
+- Keep the existing administrator workspace and installed data. Administrator impersonation uses the selected hosting account’s workspace. Show other accounts’ running work only as a generic busy notice.
+
 ## 0.1.5
 
 - Show each latest-job result directly beneath its matching site row, with completed actions, errors, warnings, backup location and downloads. Activity keeps the website counter and current operation instead of repeating a separate list of site cards.

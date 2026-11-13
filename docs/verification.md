@@ -51,3 +51,14 @@ A database-only job for the two dedicated VM installations completed through the
 ## 0.1.5 results beneath site rows
 
 Browser verification used a new database-only panel job for the two owned VM installations sharing one domain but using different directories. Each completed result appeared directly beneath the matching site ID; Activity contained only its summary. Both inline manifest downloads returned the correct completed installation manifest using the exact new job ID. Bulk selection, previous-job results and page reload continued to work. The final layout was visually inspected and no addon JavaScript errors occurred. The existing 70 backend tests and seven PHP request checks pass.
+
+
+## 0.2.0 hosting accounts and personal libraries
+
+The disposable native Hestia VM passed 87 isolated Linux/root regression tests and seven PHP request rejection checks. Tests cover account-only inventory, settings, uploads, catalogs, background jobs, history, cancellation and backup authorization. A forged administrator flag, foreign site/job/upload identifiers and a suspended account are rejected. Native discovery for a user calls that user's Hestia CLI rather than listing all accounts.
+
+Actual panel logins as administrator and two hosting users verified independent libraries, including the same plugin slug with different packages. Real uploads, replacement, personal premium updates, plugin/database backups and authenticated manifest download completed. ZIPs were written as the hosting account under its private home directory with directory mode 700 and file mode 600. Administrator library contents remained unchanged. Native Login as opened the impersonated user's personal workspace. Browser inspection confirmed the correct account rows and library in each view, with no addon JavaScript errors.
+
+Version decisions are made by each site's updater, not by uploads. Both administrator and user libraries accepted replacement by older ZIPs. In one real administrator batch, a manually installed plugin at 5.0 remained at 5.0 while another installation at 1.0 updated to the available ZIP's 2.0. A separate direct call to the real installing WP-CLI process proved the final version check also preserves 5.0 when an earlier plan is stale. Home ZIP symlinks and hardlinks were rejected, and root-private transfer staging was removed after both success and rejection.
+
+These tests used synthetic packages and disposable VM sites. No production WordPress installation was changed for this feature.

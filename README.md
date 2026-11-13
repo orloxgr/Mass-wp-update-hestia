@@ -1,6 +1,6 @@
 # Mass WP Update for Hestia
 
-Update WordPress sites from the Hestia administrator panel and keep your premium plugin ZIPs in one private library.
+Update WordPress sites from the Hestia panel, with separate administrator and hosting-account workspaces and private premium plugin libraries.
 
 ## Updates
 
@@ -13,7 +13,7 @@ Sites run one at a time. Selected backups finish before that site's updates begi
 
 Activity shows **Website N/total** above the current operation, for example **Website 2/23** while updating a plugin on the second selected site. The position includes failed sites and is restored from the server after a page reload.
 
-**Update selected sites** is next to **Refresh sites** above the site list. All four update types, including themes, are enabled initially. Update checkboxes, backup checkboxes and the number of retained backups save automatically on the server and return after a reload or new login. Explicit choices, including disabling theme updates, are preserved. These are shared addon preferences for Hestia administrators; changing them affects future jobs, not a job already running. Selected sites are not remembered.
+**Update selected sites** is next to **Refresh sites** above the site list. All four update types, including themes, are enabled initially. Update checkboxes, backup checkboxes and the number of retained backups save automatically on the server and return after a reload or new login. Explicit choices, including disabling theme updates, are preserved. Administrator preferences are shared between administrators; each hosting account has its own saved preferences. Changing them affects future jobs, not a job already running. Selected sites are not remembered.
 
 Core updates include the WordPress database update, across the network for Multisite. Each row represents one WordPress installation; updates to a Multisite installation affect its shared files and network. Regular plugin updates exclude plugins registered in the premium library. Premium updates use your uploaded packages, apply only to matching installed plugins with an older version, and check their declared WordPress, PHP, and plugin dependencies. Plugins are not activated automatically.
 
@@ -33,13 +33,23 @@ Only the selected ZIPs are created. `database.zip` contains `database.sql`; the 
 
 Each site row has **Delete backups**, with confirmation for that specific WordPress installation. It removes that site's managed backup sets without touching another installation's backups. Deletion is unavailable while a job is running. Files with unexpected names, ownership, permissions or links are left in place and reported. Download links disappear from job results when their backups are removed by retention or an administrator.
 
+## Hosting user access
+
+Hosting users see only WordPress installations owned by their native Hestia account, including additional domains and installations in subdirectories. Refresh sites discovers only that account’s domains and runs WordPress as its Unix UID. Jobs, history, upload sessions, premium catalog and saved choices are isolated per account. A user cannot target another account by changing a site, job or upload ID. Administrators retain their server-wide workspace; impersonation opens the selected user’s workspace without exposing the administrator library.
+
+Each hosting user can upload, replace and remove their own premium plugin ZIPs and apply them only to their own sites. Their personal library lives under `/home/USERNAME/.masswpupdate/premium/`, alongside private backups and above `public_html`. The actual home path comes from the Unix account rather than a guessed domain path. Native document roots are checked before storage is created. ZIP storage operations run as the account UID through no-follow directory descriptors; uploaded PHP is not executed while reading package metadata. Personal packages are checksum-verified again before an update.
+
+Administrator and other users’ libraries are not listed, applied or modified by personal jobs. A license/package-unavailable failure creates a pending entry only in the job’s own library. Site plugin/theme backups still include that site’s installed files, including its installed premium plugins, as they did previously.
+
+The existing one-job-at-a-time execution remains server-wide. An account sees a generic busy notice when another account is working; other accounts’ site names, progress, job IDs and results are not exposed. Existing administrator inventories, packages, preferences and history are preserved during upgrade. Users can initially see their own rows from the last administrator scan; their next refresh saves an independent account inventory. Hosting users see their own jobs and backups created through their workspace, not the administrator’s cross-account job history.
+
 ## Premium plugins
 
-Open **Premium plugins** and click **+ Add premium plugins**. Select one or more installable ZIPs supplied by their developers. Files upload one at a time, with progress and a result for each ZIP; a failed file does not stop the rest. Existing library entries are kept until you use **Replace ZIP**. The plugin reads each name and version from its PHP header without executing it, and stores it as `plugin-directory-version.zip` in a root-private directory outside website document roots.
+Open **Premium plugins** and click **+ Add premium plugins**. Select one or more installable ZIPs supplied by their developers. Files upload one at a time, with progress and a result for each ZIP; a failed file does not stop the rest. Existing library entries are kept until you use **Replace ZIP**. The plugin reads each name and version from its PHP header without executing it. Administrator ZIPs stay in root-private server storage. Hosting users’ ZIPs are stored as `plugin-directory-version.zip` beneath `/home/USERNAME/.masswpupdate/premium/`, outside website document roots, with account-owned directory mode 700 and file mode 600.
 
 **Replace ZIP** replaces the library's current package for that plugin. It checks the plugin directory and main file against the existing entry. **View sites** shows installed copies and their versions; select the older copies and click **Update selected**. This action uses the backup choices in the Updates tab and updates only that premium plugin.
 
-Uploading or replacing a ZIP never updates a site automatically. Running jobs keep the exact package versions selected when they started. ZIP filenames do not need to include a version. Additional premium plugins can be added at any time.
+Uploading or replacing a ZIP never updates a site automatically. Any version can be uploaded or explicitly selected with Replace ZIP; installed versions on other sites never prevent library storage. During an update, each site is checked independently against its actual installed version, including manual uploads. Only a strictly newer ZIP is applied. An equal or older ZIP leaves that site untouched while older installations in the same batch can still update. The installing WP-CLI process repeats the check immediately before installing, so an older scan does not authorize a downgrade. Running jobs keep the exact package versions selected when they started. ZIP filenames do not need to include a version. Additional premium plugins can be added at any time.
 
 **Delete** removes that plugin from the premium library and deletes its uploaded ZIP versions after confirmation. Installed plugins on sites and site backups are kept. Deletion is unavailable while an update job is using the library.
 
@@ -49,7 +59,7 @@ When a normal plugin update explicitly fails because its license is missing/expi
 
 ## Installation
 
-Requires Hestia's Linux administrator panel, Python 3.9+, a working native Hestia PHP installation, and official WP-CLI installed at `/usr/local/bin/wp`, `/usr/bin/wp`, or `/usr/local/lib/wp-cli/wp-cli.phar`. The WP-CLI file and its parent directories must be owned by root and must not be writable by hosting users. Root-managed symlinks to a trusted WP-CLI file are supported. See the [official WP-CLI installation instructions](https://make.wordpress.org/cli/handbook/guides/installing/).
+Requires Hestia's Linux panel, Python 3.9+, a working native Hestia PHP installation, and official WP-CLI installed at `/usr/local/bin/wp`, `/usr/bin/wp`, or `/usr/local/lib/wp-cli/wp-cli.phar`. The WP-CLI file and its parent directories must be owned by root and must not be writable by hosting users. Root-managed symlinks to a trusted WP-CLI file are supported. See the [official WP-CLI installation instructions](https://make.wordpress.org/cli/handbook/guides/installing/).
 
 WordPress must use the standard content, plugin, and theme directories. `wp-config.php` may be in the installation directory or its parent within the same hosting account. Installations with custom content directories are reported as unsupported before an update or backup starts.
 
@@ -67,7 +77,7 @@ git -C /usr/local/src/mass-wp-update-hestia pull --ff-only
 python3 /usr/local/src/mass-wp-update-hestia/tools/install.py
 ```
 
-Reload the panel and open **Plugins → Mass WP Update** as a Hestia administrator (not while impersonating a hosting user). The direct panel route is `/plugins/mass-wp-update/`. Click **Refresh sites**, add premium ZIPs and choose sites/actions in the two tabs. Hestia itself has no ZIP-upload installer for this addon.
+Reload the panel and open **Plugins → Mass WP Update**. Administrators manage all active hosting accounts; hosting users and administrators impersonating a user enter that account’s own workspace. The direct panel route is `/plugins/mass-wp-update/`. Click **Refresh sites**, add premium ZIPs and choose sites/actions in the two tabs. Hestia itself has no ZIP-upload installer for this addon.
 
 The installer uses only its own CLI wrapper, menu script, panel route, versioned code directory and tmpfiles entry. It does not edit Hestia core, restart shared services or add a sudoers rule. Code updates retain running jobs and all private data. To remove panel integration while preserving packages/backups/history:
 

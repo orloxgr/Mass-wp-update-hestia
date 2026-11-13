@@ -275,7 +275,7 @@ class BackendTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'current job'):self.api('delete_backups',site=site['id'])
             task.assert_not_called()
         removed=site['id']+'/2026/01/01/120000-'+'c'*32
-        with patch.object(host,'work',return_value=self.base),patch.object(host,'cleanup'),patch.object(host,'backup_task',return_value=dict(removed=[removed],warnings=[])) as task:
+        with patch.object(host,'refresh_site',return_value=site),patch.object(host,'work',return_value=self.base),patch.object(host,'cleanup'),patch.object(host,'backup_task',return_value=dict(removed=[removed],warnings=[])) as task:
             self.assertEqual(self.api('delete_backups',site=site['id'])['removed'],1)
             task.assert_called_once_with(site,'delete_site',self.base,{})
         self.assertIn(removed,state.read(state.ROOT/'retired-backups.json'))
@@ -302,6 +302,8 @@ class BackendTests(unittest.TestCase):
     def test_backup_home_cannot_be_inside_a_native_document_root(self):
         site=dict(owner='example',home='/home/example')
         with patch.object(host,'native',return_value=[dict(user='example',path='/home/example')]):
+            with self.assertRaisesRegex(ValueError,'document root'):host.private_backup_home(site)
+        with patch.object(host,'native',return_value=[dict(user='example',path='/home/example/.masswpupdate/premium')]):
             with self.assertRaisesRegex(ValueError,'document root'):host.private_backup_home(site)
         with patch.object(host,'prepare_backup_home'),patch.object(host,'native',return_value=[dict(user='example',path='/home/example/public_html')]):
             host.private_backup_home(site)

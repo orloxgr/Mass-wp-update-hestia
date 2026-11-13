@@ -1,11 +1,13 @@
 """Private immutable ZIP packages; only a small header is read, never executed."""
 import hashlib
+import contextlib
 import json
 import os
 from pathlib import Path, PurePosixPath
 import re
 import stat
 import time
+import tempfile
 import zipfile
 
 import state
@@ -72,7 +74,7 @@ def inspect(path):
 
 
 def entries():
-    return state.read(state.ROOT / 'catalog.json', {})
+    return state.read(state.data_root() / 'catalog.json', {})
 
 
 def awaiting_zip(record):
@@ -103,7 +105,7 @@ def register_pending(plugin, site, reason):
             record['detected_sites'].append(site['id'])
         record['reason'] = str(reason)
         current[slug] = record
-        state.save(state.ROOT / 'catalog.json', current)
+        state.save(state.data_root() / 'catalog.json', current)
         return record
 
 
@@ -111,9 +113,21 @@ def remove(slug):
     component(slug)
     current=entries()
     if slug not in current:raise ValueError('This plugin is not in the premium library')
+    if state.account() is not None:
+        import host
+        versions = state.read(state.data_root() / 'package-versions.json', {})
+        result = host.library_task('remove', versions.get(slug, []))
+        # Preserve the index after an unsafe-file refusal so it remains repairable.
+        if result['warnings']:
+            return result
+        del current[slug]
+        versions.pop(slug, None)
+        state.save(state.data_root() / 'catalog.json', current)
+        state.save(state.data_root() / 'package-versions.json', versions)
+        return result
     # Only this plugin's named ZIPs in the root-private package store qualify.
     # Include older uploaded versions; never recurse into a user-provided path.
-    store=state.ROOT/'packages';state.trusted(store,True)
+    store=state.data_root()/'packages';state.trusted(store,True)
     paths=[]
     for folder in store.iterdir():
         if not re.fullmatch('[0-9a-f]{64}',folder.name):continue
@@ -127,7 +141,7 @@ def remove(slug):
             # Confirm identity from its non-executable ZIP header before removal.
             if inspect(path)['slug']==slug:paths.append(path)
     del current[slug]
-    state.save(state.ROOT/'catalog.json',current)
+    state.save(state.data_root()/'catalog.json',current)
     warnings=[]
     for path in paths:
         try:
@@ -141,13 +155,43 @@ def package(record):
     component(record['slug'])
     if not VERSION.fullmatch(record['version']) or not re.fullmatch('[0-9a-f]{64}', record['sha256']):
         raise ValueError('Invalid stored package identity')
-    path = state.ROOT / 'packages' / record['sha256'] / (record['slug'] + '-' + record['version'] + '.zip')
+    path = state.data_root() / 'packages' / record['sha256'] / (record['slug'] + '-' + record['version'] + '.zip')
     state.trusted(path)
     digest = hashlib.sha256()
     with path.open('rb') as source:
         for chunk in iter(lambda: source.read(1024 * 1024), b''): digest.update(chunk)
     if digest.hexdigest() != record['sha256']: raise ValueError('Stored package checksum mismatch')
     return path
+
+
+def personal_record(record):
+    component(record['slug'])
+    if not VERSION.fullmatch(record['version']) or not re.fullmatch('[0-9a-f]{64}', record['sha256']):
+        raise ValueError('Invalid stored package identity')
+    return dict(sha256=record['sha256'], bytes=record['bytes'],
+                filename=record['slug'] + '-' + record['version'] + '.zip')
+
+
+@contextlib.contextmanager
+def open_package(record):
+    if state.account() is None:
+        yield package(record)
+        return
+    import host
+    store = state.data_root() / 'packages'
+    state.trusted(store, True)
+    handle, filename = tempfile.mkstemp(prefix='.read-', suffix='.zip', dir=store)
+    path = Path(filename)
+    try:
+        with os.fdopen(handle, 'w+b') as output:
+            host.library_task('read', personal_record(record), output=output)
+        metadata = inspect(path)
+        if (metadata['sha256'] != record['sha256'] or metadata['plugin_file'] != record['plugin_file']
+                or metadata['version'] != record['version'] or metadata['bytes'] != record['bytes']):
+            raise ValueError('Personal package changed during transfer; upload the ZIP again')
+        yield path
+    finally:
+        path.unlink(missing_ok=True)
 
 
 def commit(source, expected=None):
@@ -163,15 +207,26 @@ def commit(source, expected=None):
             raise ValueError('This plugin is already in the library; use Replace ZIP')
         if current[metadata['slug']]['plugin_file'] != metadata['plugin_file']:
             raise ValueError('The ZIP must match the waiting plugin directory and main file')
-    destination = state.ROOT / 'packages' / metadata['sha256']
-    state.mkdir(destination)
-    target = destination / (metadata['slug'] + '-' + metadata['version'] + '.zip')
-    if not target.exists():
-        state.trusted(Path(source))
-        os.replace(source, target)
-        os.chmod(target, 0o600)
+    if state.account() is not None:
+        import host
+        record = personal_record(metadata)
+        with Path(source).open('rb') as stream:
+            host.library_task('store', record, source=stream)
+        versions = state.read(state.data_root() / 'package-versions.json', {})
+        records = versions.setdefault(metadata['slug'], [])
+        if record not in records: records.append(record)
+        state.save(state.data_root() / 'package-versions.json', versions)
+        Path(source).unlink()
+    else:
+        destination = state.data_root() / 'packages' / metadata['sha256']
+        state.mkdir(destination)
+        target = destination / (metadata['slug'] + '-' + metadata['version'] + '.zip')
+        if not target.exists():
+            state.trusted(Path(source))
+            os.replace(source, target)
+            os.chmod(target, 0o600)
     metadata['uploaded_at'] = time.time()
     metadata['state'] = 'ready'
     current[metadata['slug']] = metadata
-    state.save(state.ROOT / 'catalog.json', current)
+    state.save(state.data_root() / 'catalog.json', current)
     return metadata

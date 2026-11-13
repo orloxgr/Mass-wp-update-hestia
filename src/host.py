@@ -1,5 +1,6 @@
 """Native account metadata and strictly unprivileged WordPress processes."""
 import hashlib
+import base64
 import functools
 import json
 import os
@@ -25,14 +26,15 @@ ENV = hestia.ENV
 WP_CLI_CANDIDATES = ('/usr/local/bin/wp', '/usr/bin/wp', '/usr/local/lib/wp-cli/wp-cli.phar')
 
 
-def native(kind):
+def native(kind, owner=None):
     if kind not in ('users', 'domains'): raise ValueError('Invalid native discovery action')
-    return hestia.accounts() if kind == 'users' else hestia.domains()
+    action = hestia.accounts if kind == 'users' else hestia.domains
+    return action() if owner is None else action(owner)
 
 
-def accounts():
+def accounts(owner=None):
     result = {}
-    for row in native('users'):
+    for row in (native('users') if owner is None else native('users', owner)):
         name = row['user']
         if not isinstance(name, str) or not re.fullmatch('[A-Za-z0-9][A-Za-z0-9_-]*', name): raise ValueError('Invalid native account')
         unix = pwd.getpwnam(name)
@@ -164,6 +166,29 @@ def wp(site, args, cwd, timeout=None, output=None):
         '--skip-themes', '--skip-packages', '--no-color', *args], cwd, timeout, output, database=args[:2] == ['db', 'export'])
 
 
+def install_premium(site, record, source, cwd):
+    # Read the installed header again inside the account's installing WP-CLI
+    # process. A stale scan/plan must not turn --force into a downgrade.
+    payload = base64.b64encode(json.dumps(dict(file=record['plugin_file'], version=record['version'],
+                                               zip=str(source))).encode()).decode()
+    code = '''require_once ABSPATH.'wp-admin/includes/plugin.php';
+$p=json_decode(base64_decode('PAYLOAD'),true);
+$file=WP_PLUGIN_DIR.'/'.$p['file'];
+if(!is_file($file)){$r=array('installed'=>false,'reason'=>'not installed');}
+else{
+ $data=get_plugin_data($file,false,false);$v=$data['Version'];
+ if($v===''){WP_CLI::error('The installed plugin version could not be read.');}
+ if(version_compare($v,$p['version'],'>=')){$r=array('installed'=>false,'reason'=>'installed version '.$v.' is current or newer');}
+ else{WP_CLI::get_runner()->run_command(array('plugin','install',$p['zip']),array('force'=>true));$r=array('installed'=>true);}
+}
+echo "\\nMWU_PREMIUM_RESULT=".json_encode($r)."\\n";'''.replace('PAYLOAD', payload)
+    output = wp(site, ['eval', code], cwd)
+    results = re.findall(r'^MWU_PREMIUM_RESULT=(.+)$', output, re.M)
+    if not results:
+        raise RuntimeError('The premium installer did not return its version decision: ' + output)
+    return json.loads(results[-1])
+
+
 def database_socket(site,cwd):
     connection=json.loads(wp(site,['eval',"echo json_encode(array('host'=>DB_HOST,'socket'=>ini_get('mysqli.default_socket')));"],cwd))
     if not isinstance(connection,dict) or set(connection)!={'host','socket'}:raise ValueError('Cannot determine the WordPress database connection')
@@ -210,12 +235,35 @@ def backup_task(site,operation,scratch,request,output=None):
 
 def private_backup_home(site):
     target=Path(site['home'])/'.masswpupdate'
-    for row in native('domains'):
+    for row in native('domains', site['owner']):
         if row['user']!=site['owner']:continue
         document_root=Path(row['path'])
         if not document_root.is_absolute() or '..' in document_root.parts:raise ValueError('Invalid native document root')
-        if target.is_relative_to(document_root):raise ValueError('The account backup directory falls inside a Hestia document root')
+        if target.is_relative_to(document_root) or document_root.is_relative_to(target):
+            raise ValueError('The private account storage overlaps a Hestia document root')
     prepare_backup_home(site)
+
+
+def library_location():
+    return str(Path(pwd.getpwnam(hestia.name(state.account())).pw_dir) / '.masswpupdate/premium')
+
+
+def library_task(operation, record, source=None, output=None):
+    owner = state.account()
+    if owner is None:
+        raise ValueError('A personal library requires an account scope')
+    account = accounts(owner).get(owner)
+    if not account:
+        raise ValueError('The hosting account is unavailable or suspended')
+    private_backup_home(account)
+    scratch = work(account)
+    try:
+        args = ['/usr/bin/python3', '-I', '-B', SOURCE / 'account_library.py', operation,
+                account['home'], json.dumps(record)]
+        raw = run_as(account, args, scratch, output=output, input_source=source)
+        return json.loads(raw) if output is None else None
+    finally:
+        cleanup(scratch)
 
 
 def prepare_backup_home(site):
@@ -285,9 +333,9 @@ def inventory(site, cwd):
     return value
 
 
-def discover(progress):
-    owners = accounts()
-    domains = native('domains')
+def discover(progress, owner=None):
+    owners = accounts() if owner is None else accounts(owner)
+    domains = native('domains') if owner is None else native('domains', owner)
     result, errors = {}, []
     for account in owners.values():
         scratch = work(account)
@@ -322,10 +370,10 @@ def discover(progress):
 
 def refresh_site(site):
     """Recheck current native ownership, suspension, root and runtime per site."""
-    account = accounts().get(site['owner'])
+    account = accounts(site['owner']).get(site['owner'])
     if not account or any(site[key] != account[key] for key in ('uid', 'gid', 'home')):
         raise ValueError('The Hestia account changed or is suspended; refresh sites')
-    matches = [d for d in native('domains') if d['user'] == site['owner']
+    matches = [d for d in native('domains', site['owner']) if d['user'] == site['owner']
                and d['domain'] == site['domain']
                and (site['path'] == d['path'] or site['path'].startswith(d['path'].rstrip('/') + '/'))]
     if len(matches) != 1:

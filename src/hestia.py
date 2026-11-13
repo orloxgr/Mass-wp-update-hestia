@@ -90,22 +90,43 @@ def administrator(actor):
     return actor
 
 
-def accounts():
+def authorize(actor, admin):
+    if type(admin) is not bool:
+        raise PermissionError('Invalid Hestia access context')
+    if admin:
+        return administrator(actor)
+    try:
+        actor = name(actor)
+    except ValueError as error:
+        raise PermissionError('Hestia account access is required') from error
+    if actor in ('root', PANEL_USER):
+        raise PermissionError('A hosting account is required')
+    row = cli('v-list-user', actor, 'json').get(actor, {})
+    if row.get('ROLE') not in ('user', 'admin') or row.get('SUSPENDED') != 'no':
+        raise PermissionError('An active Hestia account is required')
+    return actor
+
+
+def accounts(owner=None):
     result = []
-    for owner, row in cli('v-list-users', 'json').items():
-        name(owner)
+    rows = cli('v-list-users', 'json') if owner is None else cli('v-list-user', name(owner), 'json')
+    for username, row in rows.items():
+        if owner is not None and username != owner:
+            continue
+        owner_name = username
+        name(owner_name)
         if row.get('SUSPENDED') == 'yes':
             continue
-        unix = pwd.getpwnam(owner)
-        if unix.pw_uid == 0 or owner == PANEL_USER:
+        unix = pwd.getpwnam(owner_name)
+        if unix.pw_uid == 0 or owner_name == PANEL_USER:
             raise ValueError('A Hestia hosting account must have its own non-root Unix identity')
-        result.append(dict(user=owner, homedir=unix.pw_dir, status=False))
+        result.append(dict(user=owner_name, homedir=unix.pw_dir, status=False))
     return result
 
 
-def domains():
+def domains(owner=None):
     result = []
-    for account in accounts():
+    for account in (accounts() if owner is None else accounts(owner)):
         owner = account['user']
         for domain, row in cli('v-list-web-domains', owner, 'json').items():
             if row.get('SUSPENDED') == 'yes':

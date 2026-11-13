@@ -5,7 +5,7 @@
   document.title = 'Mass WP Update';
   const byId = id => document.getElementById('mwu-' + id);
   const options = ['core','plugins','premium','themes','backup_plugins','backup_themes','backup_database'];
-  let snapshot = null, job = null, timer = null, uploading = false, resultsSignature = '';
+  let snapshot = null, job = null, timer = null, uploading = false, resultsSignature = '', busy = false;
   let historyCursor = null, settingsLoaded = false, deleting = false, settingsQueue = Promise.resolve();
   const selected = new Set();
   const demo = root.dataset.demo === '1';
@@ -55,17 +55,18 @@
   }
   function active() { return job && ['queued','running'].includes(job.state); }
   function updateControls() {
-    byId('scan').disabled = demo || active() || deleting;
-    byId('update').disabled = demo || active() || deleting || selected.size === 0 || !!(snapshot && snapshot.prerequisites);
+    byId('scan').disabled = demo || busy || active() || deleting;
+    byId('update').disabled = demo || busy || active() || deleting || selected.size === 0 || !!(snapshot && snapshot.prerequisites);
+    byId('busy').hidden = !busy || active();
     byId('selection').textContent = selected.size + ' site(s) selected';
     root.querySelectorAll('[data-premium-update]').forEach(button => {
       const row = button.closest('.mwu-package-sites');
-      button.disabled = demo || active() || deleting || !row.querySelector('input:checked') || !!(snapshot && snapshot.prerequisites);
+      button.disabled = demo || busy || active() || deleting || !row.querySelector('input:checked') || !!(snapshot && snapshot.prerequisites);
     });
     root.querySelectorAll('[data-upload-button]').forEach(button => { button.disabled = demo || uploading || deleting; });
     byId('add').disabled = demo || uploading || deleting;
-    root.querySelectorAll('[data-delete-backups]').forEach(button => { button.disabled = demo || active() || deleting; });
-    root.querySelectorAll('[data-delete-premium]').forEach(button => { button.disabled = demo || uploading || deleting || (active() && job.kind === 'update'); });
+    root.querySelectorAll('[data-delete-backups]').forEach(button => { button.disabled = demo || busy || active() || deleting; });
+    root.querySelectorAll('[data-delete-premium]').forEach(button => { button.disabled = demo || busy || uploading || deleting || (active() && job.kind === 'update'); });
   }
   function choices(premiumOnly = false) {
     const result = {};
@@ -324,17 +325,20 @@
   }
   function schedule() {
     clearTimeout(timer);
-    if (!active()) return;
+    if (!active() && !busy) return;
     timer = setTimeout(async () => {
       try {
-        const previous = active(), result = await request({action:'job_status'}); drawJob(result.job);
-        if (previous && !active()) await load();
+        const previous = active() || busy, result = await request({action:'job_status'});
+        busy = !!result.busy; drawJob(result.job);
+        if (previous && !active() && !busy) await load();
         schedule();
       } catch (error) { message(error.message, true); timer = setTimeout(() => load().catch(e => message(e.message, true)), 5000); }
     }, 1500);
   }
   async function load() {
     snapshot = await request({action:'status'});
+    busy = !!snapshot.busy;
+    if (byId('library-path')) byId('library-path').textContent = snapshot.library_path;
     if (!settingsLoaded) {
       byId('keep-backups').value = String(snapshot.settings.keep_backups);
       for (const key of options) root.querySelector('[data-option="' + key + '"]').checked = snapshot.settings.options[key];
