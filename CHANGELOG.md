@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1 · 2026-11-15
+
+- Show timestamped installer stages, actual work counts where available and a current-stage heartbeat during slow work or lock waits. Reporting adds no work deadline and stays silent outside the administrator installer.
+- Replace the default final JSON dump with a readable success/failure summary, installed version, full result details and elapsed time. Retain explicit `--json` mode with progress/diagnostics on stderr and one JSON document on stdout; preserve native failure details and nonzero exit status.
+- Keep panel, background and internal JSON interfaces unchanged. Respect `NO_COLOR` and plain redirected logs; a closed reporting stream cannot cancel completed installation work.
+
 ## 0.2.0
 
 - Keep version decisions in each site’s updater: accept any ZIP version in either library, apply only a newer version than the real installed plugin, and recheck inside the installing WP-CLI process. Manually upgraded sites are preserved while older sites in the same batch still update.

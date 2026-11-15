@@ -118,3 +118,18 @@ The builder includes only the plugin's source, license, and documentation. Tests
 Author: [Byron Iniotakis](https://www.iniotakis.com). Licensed under GPL-3.0-or-later. See [UPSTREAM](UPSTREAM) for attribution.
 
 This project is an independent third-party integration. It is not affiliated with, endorsed, sponsored, or supported by Hestia. The Hestia name is used only to describe compatibility with the hosting platform.
+
+## Installer console output
+
+The installer prints timestamped installation/update stages to stderr and a readable
+final summary to stdout, including the version, actual result details and elapsed
+time. During slow work or a lock wait it reports the current stage every ten seconds;
+this is progress reporting, not an execution deadline. Failures show the last stage,
+specific cause and technical diagnostics, and exit with a nonzero status.
+
+Add `--json` to the same install command for a single machine-readable JSON result
+on stdout; progress stays on stderr. Panel/API, internal CLI and background-job
+interfaces retain their existing JSON output and do not emit installer progress.
+Terminal color is optional; redirected logs are plain text and `NO_COLOR` disables
+color. Existing credentials, settings and private data follow the same preservation
+rules as before.

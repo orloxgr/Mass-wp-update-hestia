@@ -15,6 +15,7 @@ sys.path.insert(0, str(SOURCE / 'src'))
 import state
 import lifecycle
 import hestia
+import progress
 
 META = json.loads((SOURCE / 'addon.json').read_text())
 TARGET = Path('/opt') / META['id']
@@ -45,6 +46,7 @@ def check_file(path, prefix):
 
 
 def install():
+    progress.stage('Checking native Hestia, panel identity and integration ownership')
     if os.geteuid() != 0 or not (hestia.ROOT / 'web/inc/main.php').is_file():
         raise ValueError('Run the installer as root on a Linux Hestia server')
     panel = __import__('pwd').getpwnam(hestia.PANEL_USER)
@@ -62,6 +64,7 @@ def install():
         if not TARGET.is_symlink() or TARGET.resolve().parent != RELEASES:
             raise ValueError('Refusing an unmanaged installed-code path')
         state.trusted(TARGET.resolve(), True)
+    progress.stage('Checking source files and calculating the code generation')
     files = [SOURCE / 'addon.json', SOURCE / 'info.json', SOURCE / 'LICENSE', SOURCE / 'UPSTREAM']
     files += [p for folder in ('src', 'panel') for p in (SOURCE / folder).rglob('*')
               if p.is_file() and p.suffix in ('.py', '.php', '.css', '.js')]
@@ -74,12 +77,14 @@ def install():
     if not generation.exists():
         staging = Path(tempfile.mkdtemp(prefix='.stage-', dir=RELEASES))
         try:
+            progress.stage('Staging ' + str(len(files)) + ' release files')
             for path in files:
                 destination = staging / path.relative_to(SOURCE)
                 destination.parent.mkdir(parents=True, exist_ok=True, mode=0o755)
                 shutil.copyfile(path, destination)
                 destination.chmod(0o644)
             (staging / '.addon-owner').write_text(META['id'])
+            progress.stage('Validating the staged Hestia panel PHP files')
             for path in (staging / 'panel').glob('*.php'):
                 subprocess.run([str(hestia.ROOT / 'php/bin/php'), '-l', str(path)], check=True,
                                capture_output=True, text=True)
@@ -94,7 +99,9 @@ def install():
             state.trusted(destination)
             if destination.read_bytes() != path.read_bytes():
                 raise ValueError('Installed code generation does not match its source')
+    progress.stage('Preparing private data and panel transport; preserving libraries and running jobs')
     lifecycle.install()
+    progress.stage('Publishing code, panel route, CLI wrapper and menu')
     # Do not prune old generations: a running job pins its original source.
     temporary = TARGET.with_name('.' + TARGET.name + '.next')
     if temporary.exists() or temporary.is_symlink():
@@ -111,31 +118,32 @@ def install():
     COMMAND.chmod(0o755)
     state.write(MENU, (generation / 'panel/menu.js').read_bytes())
     MENU.chmod(0o644)
-    print(json.dumps(dict(ok=True, version=META['version'], panel='/plugins/' + META['slug'] + '/',
-                          generation=digest.hexdigest(), data_preserved=True)))
+    return dict(ok=True, version=META['version'], panel='/plugins/' + META['slug'] + '/',
+                generation=digest.hexdigest(), data_preserved=True)
 
 
 def uninstall():
+    progress.stage('Checking active jobs before removing panel integration')
     import jobs
     with state.locked():
         current = jobs.current()
         if current and current['state'] in ('queued', 'running'):
             raise ValueError('Let the running job finish before uninstalling')
+    progress.stage('Removing managed panel integration; retaining private packages, backups and history')
     lifecycle.remove()
     for path, marker in ((COMMAND, MARKER), (MENU, '// Managed by ' + META['id']),
                          (ROUTE / 'index.php', '// Managed by ' + META['id'])):
         check_file(path, marker)
         path.unlink(missing_ok=True)
     # Private packages, backups, history and code generations remain recoverable.
-    print(json.dumps(dict(ok=True, data_preserved=True)))
+    return dict(ok=True, uninstalled=True, data_preserved=True)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--uninstall', action='store_true')
+    parser.add_argument('--json', action='store_true', help='Write the final result as JSON to stdout; progress stays on stderr')
     args = parser.parse_args()
-    try:
-        (uninstall if args.uninstall else install)()
-    except Exception as error:
-        print(json.dumps(dict(ok=False, error=str(error))))
-        raise SystemExit(1)
+    raise SystemExit(progress.execute(uninstall if args.uninstall else install,
+                                     title=META['title'], version=META['version'], json_output=args.json,
+                                     action='Removal' if args.uninstall else 'Installation'))
