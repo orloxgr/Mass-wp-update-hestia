@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.2 · 2026-11-19
+
+- Automatically replace an existing premium library package when a ZIP uploaded through Add premium plugins matches its plugin directory and main PHP file. New plugins are added normally; conflicting main files are rejected. This works in both administrator and personal libraries, including multi-file uploads.
+- Keep explicit Replace ZIP available, preserve packages pinned by running jobs, and continue to update sites only when an update is requested.
+
 ## 0.2.1 · 2026-11-15
 
 - Show timestamped installer stages, actual work counts where available and a current-stage heartbeat during slow work or lock waits. Reporting adds no work deadline and stays silent outside the administrator installer.

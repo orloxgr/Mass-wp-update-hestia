@@ -203,10 +203,8 @@ def commit(source, expected=None):
         if expected not in current or current[expected]['plugin_file'] != metadata['plugin_file']:
             raise ValueError('Replacement ZIP must contain the same plugin directory and main file')
     elif metadata['slug'] in current:
-        if not awaiting_zip(current[metadata['slug']]):
-            raise ValueError('This plugin is already in the library; use Replace ZIP')
         if current[metadata['slug']]['plugin_file'] != metadata['plugin_file']:
-            raise ValueError('The ZIP must match the waiting plugin directory and main file')
+            raise ValueError('The ZIP must match the existing plugin directory and main file')
     if state.account() is not None:
         import host
         record = personal_record(metadata)

@@ -133,12 +133,17 @@ class AccountTests(unittest.TestCase):
         with patch.object(host, 'library_task', side_effect=storage):
             with state.scoped('nobody'):
                 user = catalog.commit(backend.plugin_zip(self.base/'personal.zip', version='2.0'))
-                self.assertEqual(catalog.entries()[user['slug']]['version'], '2.0')
+                newer = catalog.commit(backend.plugin_zip(self.base/'replacement.zip', version='3.0'))
+                self.assertEqual(catalog.entries()[user['slug']]['sha256'], newer['sha256'])
+                self.assertEqual(len(state.read(state.data_root()/'package-versions.json')[user['slug']]), 2)
+                with self.assertRaises(ValueError):
+                    catalog.commit(backend.plugin_zip(self.base/'conflict.zip', main='different.php'))
+                self.assertEqual(catalog.entries()[user['slug']]['sha256'], newer['sha256'])
                 self.assertEqual(catalog.remove(user['slug'])['removed'], 1)
             with state.scoped('daemon'): self.assertEqual(catalog.entries(), {})
         self.assertTrue(catalog.package(admin).exists())
         self.assertEqual(catalog.entries()[admin['slug']]['version'], '9.0')
-        self.assertEqual([c[:2] for c in calls], [('nobody','store'), ('nobody','remove')])
+        self.assertEqual([c[:2] for c in calls], [('nobody','store'), ('nobody','store'), ('nobody','remove')])
 
     def test_personal_package_is_verified_and_staging_is_removed(self):
         source = backend.plugin_zip(self.base/'user.zip')
@@ -161,10 +166,11 @@ class AccountTests(unittest.TestCase):
             with self.subTest(scope=scope), state.scoped(scope), patch.object(host, 'library_task', side_effect=storage), \
                  patch.object(host, 'compare', side_effect=AssertionError('Library uploads must not compare versions')):
                 latest = catalog.commit(backend.plugin_zip(self.base/'new.zip', version='10.0'))
-                older = catalog.commit(backend.plugin_zip(self.base/'old.zip', version='2.0'), expected=latest['slug'])
+                older = catalog.commit(backend.plugin_zip(self.base/'old.zip', version='2.0'))
                 self.assertEqual(catalog.entries()[latest['slug']]['version'], '2.0')
                 self.assertEqual(catalog.entries()[latest['slug']]['sha256'], older['sha256'])
-                # Explicit replacement with the same version remains possible.
+                # Repeated ordinary uploads and explicit replacement both work.
+                self.assertEqual(catalog.commit(backend.plugin_zip(self.base/'repeat.zip', version='2.0'))['version'], '2.0')
                 self.assertEqual(catalog.commit(backend.plugin_zip(self.base/'same.zip', version='2.0'),
                                                expected=latest['slug'])['version'], '2.0')
 
